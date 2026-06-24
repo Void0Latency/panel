@@ -2571,6 +2571,35 @@ var HTML_TEMPLATES = {
         }
 
         // ============================================
+        // SIDEBAR TOGGLE FOR MOBILE - FIXED
+        // ============================================
+        function toggleSidebar() {
+            var sidebar = document.querySelector('.sidebar');
+            var overlay = document.getElementById('sidebar-overlay');
+            
+            if (sidebar) {
+                sidebar.classList.toggle('active');
+            }
+            if (overlay) {
+                overlay.classList.toggle('active');
+            }
+        }
+
+        // Close sidebar when clicking outside
+        document.addEventListener('click', function(event) {
+            var sidebar = document.querySelector('.sidebar');
+            var toggleBtn = document.querySelector('.lg\\:hidden.p-2');
+            var overlay = document.getElementById('sidebar-overlay');
+            
+            if (window.innerWidth < 1024 && sidebar && toggleBtn && overlay) {
+                if (!sidebar.contains(event.target) && !toggleBtn.contains(event.target)) {
+                    sidebar.classList.remove('active');
+                    overlay.classList.remove('active');
+                }
+            }
+        });
+
+        // ============================================
         // PORT CHECKBOXES
         // ============================================
         function renderPortCheckboxes() {
