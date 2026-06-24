@@ -16,137 +16,190 @@
 
 ---
 
-## 📦 Table of Contents
+## 📖 درباره پروژه
 
-- [✨ Features](#-features)
-- [🚀 Quick Deploy](#-quick-deploy)
-- [📋 Requirements](#-requirements)
-- [📱 Subscription Links](#-subscription-links)
-- [🔧 API Endpoints](#-api-endpoints)
-- [🛠️ Development](#️-development)
-- [📁 Project Structure](#-project-structure)
-- [🤝 Contributing](#-contributing)
-- [📄 License](#-license)
-- [🙏 Support & Community](#-support--community)
-- [⭐ Star History](#-star-history)
+**VoidLatency Panel** یک پنل مدیریت VPN پیشرفته و مدرن است که بر روی Cloudflare Workers اجرا می‌شود. این پنل با استفاده از پروتکل VLESS+WS، امکان مدیریت کاربران، مشاهده آمار ترافیک و ایجاد لینک‌های اشتراک‌گذاری را فراهم می‌کند.
+
+### ویژگی‌های کلیدی:
+- **راه‌اندازی یک‌کلیک** با استفاده از Cloudflare Workers
+- **پنل مدیریت کاربران** با قابلیت افزودن، ویرایش و حذف کاربر
+- **لینک‌های اشتراک‌گذاری** در دو فرمت Text و JSON
+- **صفحه وضعیت کاربر** برای مشاهده مصرف و زمان باقی‌مانده
+- **رابط کاربری مدرن** با الهام از 3x-UI
+- **پروتکل امن VLESS+WS** با پشتیبانی از TLS
 
 ---
 
-## ✨ Features
+## ✨ امکانات کامل
 
-| Feature | Description |
-|---------|-------------|
-| 🔒 **VLESS+WS** | Secure and fast protocol |
-| 👥 **User Management** | Create, edit, delete users |
-| 📊 **Traffic Stats** | Real-time usage monitoring |
-| 🔑 **Admin Panel** | Full control over your users |
-| 📱 **Subscription Links** | Text & JSON formats |
-| 🎨 **Modern UI** | 3x-UI inspired design |
-| ⚡ **One-Click Deploy** | Deploy in seconds |
-
----
-
-## 🚀 Quick Deploy
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://dash.cloudflare.com)
-
-### Manual Deploy
-
-Clone the repository, install dependencies, and deploy to Cloudflare Workers.
+| ویژگی | توضیحات |
+|-------|---------|
+| 🔒 **VLESS+WS** | پروتکل امن و پرسرعت |
+| 👥 **مدیریت کاربران** | ایجاد، ویرایش و حذف کاربران |
+| 📊 **آمار ترافیک** | مشاهده مصرف لحظه‌ای |
+| 🔑 **پنل ادمین** | کنترل کامل بر کاربران |
+| 📱 **لینک اشتراک** | دو فرمت Text و JSON |
+| 🎨 **رابط مدرن** | طراحی الهام گرفته از 3x-UI |
+| ⚡ **دپلوی یک‌کلیک** | نصب در چند ثانیه |
 
 ---
 
-## 📋 Requirements
+## 🚀 راه‌اندازی سریع
 
-- Cloudflare Account (Free)
-- GitHub Account (Free)
-- Node.js 18+
+### روش ۱: دپلوی خودکار (توسط کاربر)
+
+1. وارد سایت [VoidLatency Deployer](https://voidlatency-deployer.void0latency.workers.dev) شوید
+2. توکن API کلودفلر خود را از [اینجا](https://dash.cloudflare.com/profile/api-tokens) دریافت کنید
+3. توکن را در سایت وارد کرده و روی "Deploy Panel" کلیک کنید
+4. پس از چند لحظه، لینک پنل و رمز عبور ادمین به شما نمایش داده می‌شود
+
+### روش ۲: نصب دستی
+
+۱. **کلون کردن ریپازیتوری**
+
+```
+git clone https://github.com/Void0Latency/panel.git
+cd panel
+```
+
+۲. **نصب وابستگی‌ها**
+
+```
+npm install
+```
+
+۳. **ساخت دیتابیس D1**
+
+```
+npx wrangler d1 create voidlatency-db
+```
+
+(شناسه دیتابیس را در فایل `wrangler.toml` قرار دهید)
+
+۴. **اجرای migrations**
+
+```
+npx wrangler d1 execute voidlatency-db --file=./schema.sql
+```
+
+۵. **دپلوی روی Cloudflare**
+
+```
+npm run deploy
+```
+
+۶. **دریافت لینک پنل**
+
+```
+https://your-worker-name.workers.dev/panel
+```
 
 ---
 
-## 📱 Subscription Links
+## 📋 پیش‌نیازها
 
-| Type | Format |
-|------|--------|
-| Text | `https://your-panel.workers.dev/feed/username` |
+- [حساب Cloudflare](https://dash.cloudflare.com/sign-up) (رایگان)
+- [حساب GitHub](https://github.com/signup) (رایگان)
+- Node.js 18 یا بالاتر
+
+---
+
+## 📱 لینک‌های اشتراک
+
+پس از نصب پنل، لینک‌های زیر برای هر کاربر قابل استفاده است:
+
+| نوع | فرمت |
+|-----|------|
+| متنی | `https://your-panel.workers.dev/feed/username` |
 | JSON | `https://your-panel.workers.dev/feed/json/username` |
-| Status | `https://your-panel.workers.dev/status/username` |
+| وضعیت | `https://your-panel.workers.dev/status/username` |
 
 ---
 
 ## 🔧 API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/users` | List all users |
-| POST | `/api/users` | Create user |
-| PUT | `/api/users/{username}` | Update user |
-| DELETE | `/api/users/{username}` | Delete user |
-| GET | `/feed/{username}` | Text subscription |
-| GET | `/feed/json/{username}` | JSON subscription |
-| GET | `/status/{username}` | User status page |
+| متد | آدرس | توضیحات |
+|-----|------|---------|
+| GET | `/api/users` | دریافت لیست کاربران |
+| POST | `/api/users` | ایجاد کاربر جدید |
+| PUT | `/api/users/{username}` | ویرایش کاربر |
+| DELETE | `/api/users/{username}` | حذف کاربر |
+| GET | `/feed/{username}` | دریافت لینک اشتراک متنی |
+| GET | `/feed/json/{username}` | دریافت لینک اشتراک JSON |
+| GET | `/status/{username}` | مشاهده وضعیت کاربر |
 
 ---
 
-## 🛠️ Development
+## 🛠️ توسعه و سفارشی‌سازی
 
-Install dependencies, run locally, and deploy to Cloudflare Workers.
+برای اجرا در محیط توسعه:
+
+```
+npm run dev
+```
+
+برای دپلوی روی Cloudflare:
+
+```
+npm run deploy
+```
 
 ---
 
-## 📁 Project Structure
+## 📁 ساختار پروژه
 
 ```
 panel/
-├── voidlatency-core.js    # Main panel code
-├── schema.sql             # Database schema
-├── wrangler.toml          # Cloudflare config
-├── package.json           # Dependencies
-├── deploy.sh              # Auto deploy script
-└── README.md              # Documentation
+├── voidlatency-core.js    # کد اصلی پنل
+├── schema.sql             # ساختار دیتابیس
+├── wrangler.toml          # تنظیمات Cloudflare
+├── package.json           # وابستگی‌ها
+├── deploy.sh              # اسکریپت دپلوی خودکار
+└── README.md              # مستندات
 ```
 
 ---
 
-## 🤝 Contributing
+## 🤝 مشارکت در توسعه
 
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-MIT License - see the LICENSE file for details.
+1. ریپازیتوری را Fork کنید
+2. برنچ جدید بسازید (`git checkout -b feature/amazing`)
+3. تغییرات را commit کنید (`git commit -m 'Add amazing feature'`)
+4. به برنچ Push کنید (`git push origin feature/amazing`)
+5. Pull Request باز کنید
 
 ---
 
-## 🙏 Support & Community
+## 📄 لایسنس
+
+این پروژه تحت لایسنس MIT منتشر شده است - برای جزئیات بیشتر فایل LICENSE را مشاهده کنید.
+
+---
+
+## 🙏 پشتیبانی و ارتباط با ما
 
 <div align="center">
   <a href="https://github.com/Void0Latency">
     <img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub">
   </a>
-  <a href="#">
+  <a href="https://t.me/VoidLatency">
     <img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram">
   </a>
-  <a href="#">
-    <img src="https://img.shields.io/badge/Cloudflare-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare">
+  <a href="https://voidlatency-deployer.void0latency.workers.dev">
+    <img src="https://img.shields.io/badge/Deploy-Now-brightgreen?style=for-the-badge" alt="Deploy">
   </a>
 </div>
 
 ---
 
-## ⭐ Star History
+## ⭐ تاریخچه ستاره‌ها
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Void0Latency/panel&type=Date)](https://star-history.com/#Void0Latency/panel&Date)
 
 ---
 
 <p align="center">
-  Made with ❤️ by <a href="https://github.com/Void0Latency">Void0Latency</a><br>
-  ⚡ Powered by Cloudflare Workers
+  ساخته شده با ❤️ توسط <a href="https://github.com/Void0Latency">Void0Latency</a>
+  <br>
+  ⚡ پشتیبانی شده توسط Cloudflare Workers
 </p>
