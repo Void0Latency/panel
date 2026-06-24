@@ -2067,6 +2067,9 @@ var HTML_TEMPLATES = {
 </head>
 <body>
 
+    <!-- Sidebar Overlay for Mobile -->
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
     <!-- Sidebar -->
     <div class="fixed inset-y-0 left-0 w-64 sidebar z-50 hidden lg:block">
         <div class="p-6">
@@ -2143,7 +2146,7 @@ var HTML_TEMPLATES = {
         <header class="bg-[#0a0a0f]/80 backdrop-blur-xl border-b border-zinc-800/30 px-6 py-4 sticky top-0 z-40">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-4">
-                    <button class="lg:hidden p-2 rounded-lg hover:bg-white/5 text-zinc-400">
+                    <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-white/5 text-zinc-400">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                         </svg>
