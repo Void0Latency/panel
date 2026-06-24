@@ -1,7 +1,3 @@
-# 🚀 VoidLatency Panel
- 
-> Next-Gen VPN Management Panel • Modern • Fast • Secure
-
 <p align="center">
   <img src="https://img.shields.io/badge/Version-2.9.4-blue?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Protocol-VLESS%2BWS-purple?style=for-the-badge" alt="Protocol">
@@ -9,12 +5,21 @@
   <img src="https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge" alt="Status">
 </p>
 
+<div align="center">
+  <h1>🚀 VoidLatency Panel</h1>
+  <p><strong>Next-Gen VPN Management Panel</strong></p>
+  <p>Modern • Fast • Secure</p>
+  
+  [![GitHub stars](https://img.shields.io/github/stars/Void0Latency/panel?style=social)](https://github.com/Void0Latency/panel/stargazers)
+  [![GitHub forks](https://img.shields.io/github/forks/Void0Latency/panel?style=social)](https://github.com/Void0Latency/panel/network/members)
+</div>
+
 ---
 
 ## 📦 Table of Contents
 
 - [✨ Features](#-features)
-- [🚀 One-Click Deploy](#-one-click-deploy)
+- [🚀 Quick Deploy](#-quick-deploy)
 - [📋 Requirements](#-requirements)
 - [📱 Subscription Links](#-subscription-links)
 - [🔧 API Endpoints](#-api-endpoints)
@@ -41,13 +46,13 @@
 
 ---
 
-## 🚀 One-Click Deploy
+## 🚀 Quick Deploy
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://dash.cloudflare.com)
 
 ### Manual Deploy
 
-Clone the repository and deploy using Cloudflare Workers.
+Clone the repository, install dependencies, and deploy to Cloudflare Workers.
 
 ---
 
@@ -130,9 +135,6 @@ MIT License - see the LICENSE file for details.
   </a>
   <a href="#">
     <img src="https://img.shields.io/badge/Cloudflare-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare">
-  </a>
-  <a href="#">
-    <img src="https://img.shields.io/badge/Twitter-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white" alt="Twitter">
   </a>
 </div>
 
