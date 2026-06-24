@@ -1956,7 +1956,7 @@ var HTML_TEMPLATES = {
         </div>
     </div>
 </body>
-</html>`
+</html>`,
 
   setup: `<!DOCTYPE html>
 <html lang="en" class="dark">
