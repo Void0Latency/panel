@@ -1,27 +1,16 @@
 <p align="center">
-  <img src="assets/logo.svg" width="120" alt="VoidLatency Logo">
+  <img src="https://img.shields.io/badge/Version-2.9.4-blue?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Protocol-VLESS%2BWS-purple?style=for-the-badge" alt="Protocol">
+  <img src="https://img.shields.io/badge/Platform-Cloudflare%20Workers-orange?style=for-the-badge" alt="Platform">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
 </p>
 
-<h1 align="center">🚀 VoidLatency Panel</h1>
-
-<p align="center">
-  <strong>Next-Gen VPN Management Panel • VLESS+WS • Cloudflare Workers</strong>
-</p>
-
-<p align="center">
-  <a href="#-features">Features</a> •
-  <a href="#-quick-deploy">Quick Deploy</a> •
-  <a href="#-screenshots">Screenshots</a> •
-  <a href="#-documentation">Documentation</a>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/github/stars/Void0Latency/panel?style=for-the-badge&color=818cf8">
-  <img src="https://img.shields.io/github/forks/Void0Latency/panel?style=for-the-badge&color=a78bfa">
-  <img src="https://img.shields.io/github/issues/Void0Latency/panel?style=for-the-badge&color=8b5cf6">
-  <img src="https://img.shields.io/badge/Cloudflare-Workers-orange?style=for-the-badge&logo=cloudflare">
-  <img src="https://img.shields.io/badge/Version-2.9.4-blue?style=for-the-badge">
-</p>
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Void0Latency/panel/main/assets/logo.png" width="200" alt="VoidLatency Logo">
+  <h1>🚀 VoidLatency Panel</h1>
+  <p><strong>Next-Gen VPN Management Panel</strong></p>
+  <p>Modern • Fast • Secure</p>
+</div>
 
 ---
 
@@ -29,38 +18,29 @@
 
 | Feature | Description |
 |---------|-------------|
-| 🔒 **VLESS+WS Protocol** | Secure and fast VPN protocol |
-| 👥 **User Management** | Create, edit, delete users with ease |
-| 📊 **Traffic Statistics** | Real-time usage monitoring |
-| 🔑 **Admin Panel** | Full control over your VPN |
-| 📱 **Subscription Links** | Text & JSON formats supported |
-| 🎨 **3x-UI Inspired** | Beautiful, modern interface |
-| ⚡ **Cloudflare Workers** | Serverless, fast, and free |
-| 🔐 **D1 Database** | Built-in database for users |
+| 🔒 **VLESS+WS** | Secure and fast protocol |
+| 👥 **User Management** | Create, edit, delete users |
+| 📊 **Traffic Stats** | Real-time usage monitoring |
+| 🔑 **Admin Panel** | Full control over your users |
+| 📱 **Subscription Links** | Text & JSON formats |
+| 🎨 **Modern UI** | 3x-UI inspired design |
+| ⚡ **One-Click Deploy** | Deploy in seconds |
+
+---
 
 ## 🚀 Quick Deploy
-
-### One-Click Deploy
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com)
 
 ### Manual Deploy
 
 ```bash
-# 1. Clone the repository
+# Clone the repository
 git clone https://github.com/Void0Latency/panel.git
 cd panel
 
-# 2. Install Wrangler
-npm install -g wrangler
+# Install dependencies
+npm install
 
-# 3. Login to Cloudflare
-wrangler login
-
-# 4. Create D1 Database
-wrangler d1 create voidlatency-db
-
-# 5. Update wrangler.toml with database_id
-
-# 6. Deploy
-wrangler deploy
+# Deploy to Cloudflare
+npm run deploy
