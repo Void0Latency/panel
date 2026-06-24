@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// voidlatency-core.js - Complete 3x-UI Style Panel
+// voidlatency-core.js - Complete 3x-UI Style Panel with Full Responsive
 import { connect } from "cloudflare:sockets";
 
 // ============================================
@@ -1775,7 +1775,7 @@ function extractUUIDFromVless(data) {
 __name(extractUUIDFromVless, "extractUUIDFromVless");
 
 // ============================================
-// HTML TEMPLATES - Complete 3x-UI Style Panel
+// HTML TEMPLATES - Complete 3x-UI Style Panel with Full Responsive
 // ============================================
 var HTML_TEMPLATES = {
   nginx: `<!DOCTYPE html>
@@ -2011,7 +2011,7 @@ var HTML_TEMPLATES = {
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>VoidLatency Panel</title>
     <script>
         const originalWarn = console.warn;
@@ -2029,6 +2029,8 @@ var HTML_TEMPLATES = {
         .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.06); }
         .glass-light { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); }
         .glow { box-shadow: 0 0 60px rgba(99, 102, 241, 0.1); }
+        
+        /* Sidebar Styles */
         .sidebar { background: #0d0d18; border-right: 1px solid rgba(255,255,255,0.04); }
         .sidebar-link { transition: all 0.2s; border-radius: 12px; padding: 10px 16px; }
         .sidebar-link:hover { background: rgba(255,255,255,0.05); color: white; }
@@ -2063,6 +2065,141 @@ var HTML_TEMPLATES = {
         .port-checkbox:checked + .port-label-nontls { border-color: #fbbf24; background: rgba(251, 191, 36, 0.1); color: #fbbf24; }
         .show-ports-btn { cursor: pointer; transition: all 0.2s; }
         .show-ports-btn:hover { color: #818cf8; }
+
+        /* Mobile Responsive Fixes */
+        @media (max-width: 1023px) {
+            .sidebar {
+                position: fixed !important;
+                top: 0 !important;
+                left: -100% !important;
+                width: 280px !important;
+                height: 100vh !important;
+                background: #0d0d18 !important;
+                border-right: 1px solid rgba(255,255,255,0.04) !important;
+                transition: left 0.3s ease !important;
+                z-index: 1000 !important;
+                overflow-y: auto !important;
+                display: block !important;
+            }
+            
+            .sidebar.active {
+                left: 0 !important;
+            }
+            
+            .sidebar-overlay {
+                display: none !important;
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                background: rgba(0,0,0,0.6) !important;
+                z-index: 999 !important;
+            }
+            
+            .sidebar-overlay.active {
+                display: block !important;
+            }
+            
+            .lg\\:ml-64 {
+                margin-left: 0 !important;
+            }
+            
+            .main-content {
+                width: 100% !important;
+                overflow-x: hidden !important;
+            }
+            
+            .system-stat {
+                padding: 12px !important;
+            }
+            
+            .system-stat p.text-lg {
+                font-size: 16px !important;
+            }
+            
+            .stat-card {
+                padding: 16px !important;
+            }
+            
+            .stat-card p.text-3xl {
+                font-size: 24px !important;
+            }
+            
+            .users-table-wrap {
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+            
+            .users-table-wrap table {
+                min-width: 700px !important;
+            }
+            
+            .user-actions-wrap {
+                flex-wrap: wrap !important;
+            }
+            
+            .user-actions-wrap .action-btn {
+                padding: 4px !important;
+            }
+            
+            .subscription-buttons {
+                flex-direction: column !important;
+                gap: 4px !important;
+            }
+            
+            .subscription-buttons button {
+                width: 100% !important;
+                font-size: 10px !important;
+                padding: 4px 8px !important;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .glass-modal {
+                padding: 20px 16px !important;
+            }
+            
+            .modal-card {
+                max-width: 100% !important;
+                margin: 10px !important;
+            }
+            
+            .modal-card form .grid {
+                grid-template-columns: 1fr !important;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr 1fr !important;
+                gap: 8px !important;
+            }
+            
+            .stats-grid .stat-card {
+                padding: 12px !important;
+            }
+            
+            .stats-grid .stat-card p.text-3xl {
+                font-size: 20px !important;
+            }
+            
+            .stats-grid .stat-card .w-12 {
+                width: 36px !important;
+                height: 36px !important;
+            }
+            
+            .stats-grid .stat-card .w-12 svg {
+                width: 18px !important;
+                height: 18px !important;
+            }
+            
+            header h1 {
+                font-size: 16px !important;
+            }
+            
+            header .text-xs {
+                font-size: 10px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -2071,7 +2208,7 @@ var HTML_TEMPLATES = {
     <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <!-- Sidebar -->
-    <div class="fixed inset-y-0 left-0 w-64 sidebar z-50 hidden lg:block">
+    <div class="fixed inset-y-0 left-0 w-64 sidebar z-50">
         <div class="p-6">
             <div class="flex items-center gap-3 mb-10">
                 <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
@@ -2141,78 +2278,78 @@ var HTML_TEMPLATES = {
     </div>
 
     <!-- Main Content -->
-    <div class="lg:ml-64 min-h-screen">
+    <div class="lg:ml-64 min-h-screen main-content">
         <!-- Header -->
-        <header class="bg-[#0a0a0f]/80 backdrop-blur-xl border-b border-zinc-800/30 px-6 py-4 sticky top-0 z-40">
+        <header class="bg-[#0a0a0f]/80 backdrop-blur-xl border-b border-zinc-800/30 px-4 sm:px-6 py-3 sm:py-4 sticky top-0 z-40">
             <div class="flex items-center justify-between">
-                <div class="flex items-center gap-4">
+                <div class="flex items-center gap-3 sm:gap-4">
                     <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-white/5 text-zinc-400">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                         </svg>
                     </button>
                     <div>
-                        <h1 class="text-xl font-bold text-white" id="page-title">Overview</h1>
-                        <p class="text-xs text-zinc-400" id="page-subtitle">System overview and statistics</p>
+                        <h1 class="text-lg sm:text-xl font-bold text-white" id="page-title">Overview</h1>
+                        <p class="text-xs text-zinc-400 hidden sm:block" id="page-subtitle">System overview and statistics</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 sm:gap-3">
                     <span class="text-xs text-zinc-500 hidden sm:inline">v2.9.4</span>
                     <span class="w-px h-6 bg-zinc-800 hidden sm:block"></span>
                     <span class="text-xs text-emerald-400 flex items-center gap-1.5">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Xray Running
+                        <span class="hidden xs:inline">Xray Running</span>
                     </span>
                 </div>
             </div>
         </header>
 
         <!-- Content -->
-        <main class="p-6">
+        <main class="p-3 sm:p-6">
             <!-- Dashboard Page -->
             <div id="page-dashboard" class="page-section active">
                 <!-- System Stats -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6 stats-grid">
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
-                            <p class="text-xs text-zinc-400 font-medium">CPU</p>
-                            <span class="text-xs text-indigo-400">48 Cores</span>
+                            <p class="text-[10px] sm:text-xs text-zinc-400 font-medium">CPU</p>
+                            <span class="text-[10px] sm:text-xs text-indigo-400">48 Cores</span>
                         </div>
-                        <p class="text-lg font-bold text-white mt-1">12.5%</p>
+                        <p class="text-base sm:text-lg font-bold text-white mt-1">12.5%</p>
                         <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-2">
                             <div class="bg-indigo-500 h-1.5 rounded-full transition-all" style="width: 12.5%"></div>
                         </div>
-                        <p class="text-[10px] text-zinc-500 mt-1">12.5 | 11.4 | 11.6</p>
+                        <p class="text-[8px] sm:text-[10px] text-zinc-500 mt-1">12.5 | 11.4 | 11.6</p>
                     </div>
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
-                            <p class="text-xs text-zinc-400 font-medium">RAM</p>
-                            <span class="text-xs text-emerald-400">49.4%</span>
+                            <p class="text-[10px] sm:text-xs text-zinc-400 font-medium">RAM</p>
+                            <span class="text-[10px] sm:text-xs text-emerald-400">49.4%</span>
                         </div>
-                        <p class="text-lg font-bold text-white">159.30 GB</p>
-                        <p class="text-xs text-zinc-500">/ 322.69 GB</p>
+                        <p class="text-base sm:text-lg font-bold text-white">159.30 GB</p>
+                        <p class="text-[8px] sm:text-xs text-zinc-500">/ 322.69 GB</p>
                         <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-1">
                             <div class="bg-emerald-500 h-1.5 rounded-full transition-all" style="width: 49.4%"></div>
                         </div>
                     </div>
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
-                            <p class="text-xs text-zinc-400 font-medium">Swap</p>
-                            <span class="text-xs text-yellow-400">0.6%</span>
+                            <p class="text-[10px] sm:text-xs text-zinc-400 font-medium">Swap</p>
+                            <span class="text-[10px] sm:text-xs text-yellow-400">0.6%</span>
                         </div>
-                        <p class="text-lg font-bold text-white">1.39 GB</p>
-                        <p class="text-xs text-zinc-500">/ 223.56 GB</p>
+                        <p class="text-base sm:text-lg font-bold text-white">1.39 GB</p>
+                        <p class="text-[8px] sm:text-xs text-zinc-500">/ 223.56 GB</p>
                         <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-1">
                             <div class="bg-yellow-500 h-1.5 rounded-full transition-all" style="width: 0.6%"></div>
                         </div>
                     </div>
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
-                            <p class="text-xs text-zinc-400 font-medium">Storage</p>
-                            <span class="text-xs text-blue-400">28.6%</span>
+                            <p class="text-[10px] sm:text-xs text-zinc-400 font-medium">Storage</p>
+                            <span class="text-[10px] sm:text-xs text-blue-400">28.6%</span>
                         </div>
-                        <p class="text-lg font-bold text-white">818.93 GB</p>
-                        <p class="text-xs text-zinc-500">/ 2.86 TB</p>
+                        <p class="text-base sm:text-lg font-bold text-white">818.93 GB</p>
+                        <p class="text-[8px] sm:text-xs text-zinc-500">/ 2.86 TB</p>
                         <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-1">
                             <div class="bg-blue-500 h-1.5 rounded-full transition-all" style="width: 28.6%"></div>
                         </div>
@@ -2220,197 +2357,200 @@ var HTML_TEMPLATES = {
                 </div>
 
                 <!-- Xray Controls -->
-                <div class="glass rounded-2xl p-5 mb-6">
-                    <div class="flex flex-wrap items-center justify-between gap-4">
-                        <div class="flex items-center gap-4">
+                <div class="glass rounded-2xl p-4 sm:p-5 mb-4 sm:mb-6">
+                    <div class="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+                        <div class="flex items-center gap-3 sm:gap-4 flex-wrap">
                             <div class="flex items-center gap-2">
                                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                                 <span class="text-sm font-bold text-white">Xray</span>
                             </div>
                             <span class="text-xs text-zinc-400 bg-zinc-800/50 px-2 py-1 rounded">v26.4.25</span>
-                            <span class="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">● Running</span>
+                            <span class="text-xs text-emerald-400 bg-emerald-500/10 px-2 sm:px-3 py-1 rounded-full border border-emerald-500/20">● Running</span>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="controlXray('stop')" class="btn-xray bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20">Stop</button>
-                            <button onclick="controlXray('restart')" class="btn-xray bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 border border-yellow-500/20">Restart</button>
-                            <button onclick="controlXray('start')" class="btn-xray bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20">Start</button>
+                        <div class="flex items-center gap-1 sm:gap-2">
+                            <button onclick="controlXray('stop')" class="btn-xray text-xs sm:text-sm bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 px-2 sm:px-4">Stop</button>
+                            <button onclick="controlXray('restart')" class="btn-xray text-xs sm:text-sm bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 border border-yellow-500/20 px-2 sm:px-4">Restart</button>
+                            <button onclick="controlXray('start')" class="btn-xray text-xs sm:text-sm bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 px-2 sm:px-4">Start</button>
                         </div>
-                        <div class="flex items-center gap-3 text-xs text-zinc-400">
+                        <div class="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-zinc-400 flex-wrap">
                             <span>Uptime: <span id="xray-uptime" class="text-white font-medium">3m</span></span>
-                            <span>|</span>
-                            <span>RAM: <span class="text-white font-medium">50.98 MB</span></span>
-                            <span>|</span>
-                            <span>Threads: <span class="text-white font-medium">14</span></span>
+                            <span class="hidden xs:inline">|</span>
+                            <span class="hidden xs:inline">RAM: <span class="text-white font-medium">50.98 MB</span></span>
+                            <span class="hidden xs:inline">|</span>
+                            <span class="hidden xs:inline">Threads: <span class="text-white font-medium">14</span></span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Stats Grid -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <div class="glass rounded-2xl p-6 stat-card">
+                <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-8 stats-grid">
+                    <div class="glass rounded-2xl p-4 sm:p-6 stat-card">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-zinc-400 text-xs font-medium uppercase tracking-wider">Total Users</p>
-                                <p class="text-3xl font-black text-white mt-1" id="stat-total-users">0</p>
+                                <p class="text-zinc-400 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Total Users</p>
+                                <p class="text-2xl sm:text-3xl font-black text-white mt-1" id="stat-total-users">0</p>
                             </div>
-                            <div class="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-                                <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                                <svg class="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
                                 </svg>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="glass rounded-2xl p-6 stat-card">
+                    <div class="glass rounded-2xl p-4 sm:p-6 stat-card">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-zinc-400 text-xs font-medium uppercase tracking-wider">Online Now</p>
-                                <p class="text-3xl font-black text-emerald-400 mt-1" id="stat-active-users">0</p>
+                                <p class="text-zinc-400 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Online</p>
+                                <p class="text-2xl sm:text-3xl font-black text-emerald-400 mt-1" id="stat-active-users">0</p>
                             </div>
-                            <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                                <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                                <svg class="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                 </svg>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="glass rounded-2xl p-6 stat-card">
+                    <div class="glass rounded-2xl p-4 sm:p-6 stat-card">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-zinc-400 text-xs font-medium uppercase tracking-wider">Total Traffic</p>
-                                <p class="text-3xl font-black text-blue-400 mt-1" id="stat-total-usage">0 GB</p>
+                                <p class="text-zinc-400 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Traffic</p>
+                                <p class="text-2xl sm:text-3xl font-black text-blue-400 mt-1" id="stat-total-usage">0 GB</p>
                             </div>
-                            <div class="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                                <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                                <svg class="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
                                 </svg>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="glass rounded-2xl p-6 stat-card">
+                    <div class="glass rounded-2xl p-4 sm:p-6 stat-card">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-zinc-400 text-xs font-medium uppercase tracking-wider">Top User</p>
-                                <p class="text-2xl font-black text-purple-400 mt-1 truncate max-w-[120px]" id="stat-top-user">-</p>
+                                <p class="text-zinc-400 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Top User</p>
+                                <p class="text-lg sm:text-2xl font-black text-purple-400 mt-1 truncate max-w-[80px] sm:max-w-[120px]" id="stat-top-user">-</p>
                             </div>
-                            <div class="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
-                                <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+                                <svg class="w-5 h-5 sm:w-6 sm:h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                                 </svg>
                             </div>
                         </div>
-                        <p class="text-xs text-zinc-500 mt-2" id="stat-top-user-usage">0 GB used</p>
+                        <p class="text-[10px] sm:text-xs text-zinc-500 mt-1 sm:mt-2" id="stat-top-user-usage">0 GB used</p>
                     </div>
                 </div>
             </div>
 
             <!-- Users Page -->
             <div id="page-users" class="page-section">
-                <div class="glass rounded-2xl p-6">
-                    <div class="flex items-center justify-between mb-6">
+                <div class="glass rounded-2xl p-4 sm:p-6">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
                         <div>
                             <h2 class="text-lg font-bold text-white">Users</h2>
                             <p class="text-xs text-zinc-400">Manage your VLESS users</p>
                         </div>
-                        <button onclick="openCreateModal()" class="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-indigo-500/25 transform hover:scale-[1.02]">
+                        <button onclick="openCreateModal()" class="flex items-center gap-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-xs sm:text-sm shadow-lg shadow-indigo-500/25 transform hover:scale-[1.02]">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
                             </svg>
-                            Add User
+                            <span class="hidden xs:inline">Add User</span>
+                            <span class="xs:hidden">Add</span>
                         </button>
                     </div>
 
                     <!-- Filters -->
-                    <div class="flex flex-col sm:flex-row gap-3 mb-6">
+                    <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4 sm:mb-6">
                         <div class="flex-1 relative">
                             <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                             </svg>
-                            <input type="text" id="search-input" oninput="filterAndRenderUsers()" placeholder="Search users by name or UUID..." class="w-full pl-10 pr-4 py-2.5 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
+                            <input type="text" id="search-input" oninput="filterAndRenderUsers()" placeholder="Search users..." class="w-full pl-9 pr-3 py-2 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
                         </div>
-                        <select id="filter-status" onchange="filterAndRenderUsers()" class="px-4 py-2.5 rounded-xl text-zinc-300 text-sm outline-none transition cursor-pointer bg-[rgba(255,255,255,0.05)] border border-zinc-800/50">
-                            <option value="all">All Status</option>
+                        <select id="filter-status" onchange="filterAndRenderUsers()" class="px-3 py-2 rounded-xl text-zinc-300 text-sm outline-none transition cursor-pointer bg-[rgba(255,255,255,0.05)] border border-zinc-800/50">
+                            <option value="all">All</option>
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
                             <option value="online">Online</option>
                             <option value="offline">Offline</option>
                             <option value="expired">Expired</option>
                         </select>
-                        <select id="sort-users" onchange="filterAndRenderUsers()" class="px-4 py-2.5 rounded-xl text-zinc-300 text-sm outline-none transition cursor-pointer bg-[rgba(255,255,255,0.05)] border border-zinc-800/50">
+                        <select id="sort-users" onchange="filterAndRenderUsers()" class="px-3 py-2 rounded-xl text-zinc-300 text-sm outline-none transition cursor-pointer bg-[rgba(255,255,255,0.05)] border border-zinc-800/50">
                             <option value="newest">Newest</option>
                             <option value="name">Name</option>
                             <option value="usage-desc">Most Used</option>
                             <option value="usage-asc">Least Used</option>
-                            <option value="expiry-asc">Expiring Soon</option>
+                            <option value="expiry-asc">Expiring</option>
                         </select>
                     </div>
 
-                    <div id="loading-state" class="text-center py-12">
-                        <div class="inline-block w-8 h-8 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+                    <div id="loading-state" class="text-center py-8 sm:py-12">
+                        <div class="inline-block w-6 h-6 sm:w-8 sm:h-8 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
                         <p class="text-zinc-400 text-sm mt-3">Loading users...</p>
                     </div>
 
-                    <div id="users-table-container" class="hidden overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="border-b border-zinc-800/50 text-xs text-zinc-400 uppercase tracking-wider">
-                                    <th class="p-3 font-medium">User & Actions</th>
-                                    <th class="p-3 font-medium">Subscription</th>
-                                    <th class="p-3 font-medium">Protocol</th>
-                                    <th class="p-3 font-medium">Ports</th>
-                                    <th class="p-3 font-medium">Usage</th>
-                                    <th class="p-3 font-medium">Expiry</th>
-                                    <th class="p-3 font-medium">Created</th>
-                                </tr>
-                            </thead>
-                            <tbody id="users-tbody" class="divide-y divide-zinc-800/30 text-sm"></tbody>
-                        </table>
+                    <div id="users-table-container" class="hidden">
+                        <div class="users-table-wrap">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-zinc-800/50 text-[10px] sm:text-xs text-zinc-400 uppercase tracking-wider">
+                                        <th class="p-2 sm:p-3 font-medium">User</th>
+                                        <th class="p-2 sm:p-3 font-medium">Sub</th>
+                                        <th class="p-2 sm:p-3 font-medium hidden sm:table-cell">Protocol</th>
+                                        <th class="p-2 sm:p-3 font-medium hidden md:table-cell">Ports</th>
+                                        <th class="p-2 sm:p-3 font-medium hidden lg:table-cell">Usage</th>
+                                        <th class="p-2 sm:p-3 font-medium hidden xl:table-cell">Expiry</th>
+                                        <th class="p-2 sm:p-3 font-medium hidden 2xl:table-cell">Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-tbody" class="divide-y divide-zinc-800/30 text-sm"></tbody>
+                            </table>
+                        </div>
                     </div>
 
-                    <div id="empty-state" class="hidden text-center py-12">
-                        <div class="w-16 h-16 rounded-full bg-zinc-800/30 flex items-center justify-center mx-auto mb-4">
-                            <svg class="w-8 h-8 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div id="empty-state" class="hidden text-center py-8 sm:py-12">
+                        <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-zinc-800/30 flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-6 h-6 sm:w-8 sm:h-8 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
                             </svg>
                         </div>
-                        <p class="text-zinc-400 text-sm">No users found. Click "Add User" to get started.</p>
+                        <p class="text-zinc-400 text-sm">No users found.</p>
                     </div>
                 </div>
             </div>
 
             <!-- Settings Page -->
             <div id="page-settings" class="page-section">
-                <div class="glass rounded-2xl p-6 max-w-2xl">
+                <div class="glass rounded-2xl p-4 sm:p-6 max-w-2xl">
                     <h2 class="text-lg font-bold text-white mb-4">Panel Settings</h2>
                     <div class="space-y-4">
                         <div>
                             <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Proxy Location</label>
-                            <select id="location-select" class="w-full px-4 py-3.5 rounded-xl text-zinc-300 text-sm outline-none transition cursor-pointer bg-[rgba(255,255,255,0.05)] border border-zinc-800/50">
+                            <select id="location-select" class="w-full px-4 py-3 rounded-xl text-zinc-300 text-sm outline-none transition cursor-pointer bg-[rgba(255,255,255,0.05)] border border-zinc-800/50">
                                 <option value="">Loading...</option>
                             </select>
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
+                        <div class="grid grid-cols-2 gap-3 sm:gap-4">
                             <div>
                                 <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Fragment Length</label>
-                                <input type="text" id="frag-length" placeholder="20-30" class="w-full px-4 py-3.5 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition text-center font-mono" dir="ltr">
+                                <input type="text" id="frag-length" placeholder="20-30" class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition text-center font-mono" dir="ltr">
                             </div>
                             <div>
                                 <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Fragment Interval</label>
-                                <input type="text" id="frag-interval" placeholder="1-2" class="w-full px-4 py-3.5 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition text-center font-mono" dir="ltr">
+                                <input type="text" id="frag-interval" placeholder="1-2" class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition text-center font-mono" dir="ltr">
                             </div>
                         </div>
                         <div class="border-t border-zinc-800/30 pt-4">
                             <h4 class="text-sm font-semibold text-white mb-3">Change Password</h4>
                             <div class="space-y-3">
-                                <input type="password" id="change-pwd-current" placeholder="Current password..." class="w-full px-4 py-3.5 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
-                                <input type="password" id="change-pwd-new" placeholder="New password..." class="w-full px-4 py-3.5 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
-                                <button type="button" onclick="changeAdminPassword()" id="change-pwd-btn" class="w-full py-3.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm">Update Password</button>
+                                <input type="password" id="change-pwd-current" placeholder="Current password..." class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
+                                <input type="password" id="change-pwd-new" placeholder="New password..." class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
+                                <button type="button" onclick="changeAdminPassword()" id="change-pwd-btn" class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm">Update Password</button>
                             </div>
                         </div>
                         <div class="flex gap-3 pt-2 border-t border-zinc-800/30">
-                            <button type="button" onclick="saveSettings()" id="save-settings-btn" class="flex-1 py-3.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-indigo-500/25">Save Settings</button>
+                            <button type="button" onclick="saveSettings()" id="save-settings-btn" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-indigo-500/25">Save</button>
                         </div>
                     </div>
                 </div>
@@ -2418,7 +2558,7 @@ var HTML_TEMPLATES = {
 
             <!-- Logs Page -->
             <div id="page-logs" class="page-section">
-                <div class="glass rounded-2xl p-6">
+                <div class="glass rounded-2xl p-4 sm:p-6">
                     <h2 class="text-lg font-bold text-white mb-4">System Logs</h2>
                     <div id="logs-container" class="space-y-1 font-mono text-xs max-h-96 overflow-y-auto scrollbar-thin">
                         <div class="text-emerald-400">● System started at: <span id="log-start-time">-</span></div>
@@ -2432,7 +2572,7 @@ var HTML_TEMPLATES = {
 
             <!-- Admins Page -->
             <div id="page-admins" class="page-section">
-                <div class="glass rounded-2xl p-6 max-w-md">
+                <div class="glass rounded-2xl p-4 sm:p-6 max-w-md">
                     <h2 class="text-lg font-bold text-white mb-4">Admin Management</h2>
                     <div id="admins-list" class="space-y-2">
                         <p class="text-zinc-400 text-sm">Loading admins...</p>
@@ -2440,9 +2580,9 @@ var HTML_TEMPLATES = {
                     <div class="border-t border-zinc-800/30 pt-4 mt-4">
                         <h4 class="text-sm font-semibold text-white mb-3">Add New Admin</h4>
                         <div class="space-y-3">
-                            <input type="text" id="admin-username" placeholder="Username..." class="w-full px-4 py-3.5 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
-                            <input type="password" id="admin-password" placeholder="Password..." class="w-full px-4 py-3.5 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
-                            <button onclick="addAdmin()" class="w-full py-3.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-indigo-500/25">Add Admin</button>
+                            <input type="text" id="admin-username" placeholder="Username..." class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
+                            <input type="password" id="admin-password" placeholder="Password..." class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
+                            <button onclick="addAdmin()" class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-indigo-500/25">Add</button>
                         </div>
                     </div>
                 </div>
@@ -2453,11 +2593,11 @@ var HTML_TEMPLATES = {
 
     <!-- Modals -->
     <!-- Add/Edit User Modal -->
-    <div id="user-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay opacity-0 pointer-events-none transition-opacity duration-300">
-        <div id="user-modal-card" class="w-full max-w-2xl glass rounded-3xl p-6 transition-all duration-300 opacity-0 scale-95 modal-card scrollbar-thin">
-            <div class="flex items-center justify-between mb-6">
+    <div id="user-modal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 modal-overlay opacity-0 pointer-events-none transition-opacity duration-300">
+        <div id="user-modal-card" class="w-full max-w-2xl glass rounded-3xl p-4 sm:p-6 transition-all duration-300 opacity-0 scale-95 modal-card scrollbar-thin">
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
                 <div>
-                    <h3 id="modal-title" class="text-xl font-bold text-white">Create User</h3>
+                    <h3 id="modal-title" class="text-lg sm:text-xl font-bold text-white">Create User</h3>
                     <p class="text-xs text-zinc-400">Configure user settings and limits</p>
                 </div>
                 <button onclick="toggleModal(false)" class="p-2 rounded-lg hover:bg-white/5 text-zinc-400 transition">
@@ -2467,74 +2607,74 @@ var HTML_TEMPLATES = {
                 </button>
             </div>
 
-            <form id="create-user-form" onsubmit="handleFormSubmit(event)" class="space-y-5">
+            <form id="create-user-form" onsubmit="handleFormSubmit(event)" class="space-y-4 sm:space-y-5">
                 <div>
                     <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Username</label>
-                    <input type="text" id="input-name" placeholder="Enter username..." class="w-full px-4 py-3.5 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition" required>
+                    <input type="text" id="input-name" placeholder="Enter username..." class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition" required>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-2 gap-3 sm:gap-4">
                     <div>
-                        <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Data Limit (GB)</label>
-                        <input type="number" id="input-limit" min="0" step="any" placeholder="Unlimited" class="w-full px-4 py-3.5 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
+                        <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Limit (GB)</label>
+                        <input type="number" id="input-limit" min="0" step="any" placeholder="Unlimited" class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
                     </div>
                     <div>
                         <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Expiry (Days)</label>
-                        <input type="number" id="input-expiry" min="0" placeholder="Unlimited" class="w-full px-4 py-3.5 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
+                        <input type="number" id="input-expiry" min="0" placeholder="Unlimited" class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-zinc-300 text-xs font-semibold mb-2 uppercase tracking-wider">Ports (Select multiple)</label>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="glass-light rounded-xl p-3">
-                            <p class="text-xs text-emerald-400 font-semibold mb-2">🔒 TLS Ports</p>
-                            <div class="flex flex-wrap gap-2" id="tls-ports-list"></div>
+                    <label class="block text-zinc-300 text-xs font-semibold mb-2 uppercase tracking-wider">Ports</label>
+                    <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                        <div class="glass-light rounded-xl p-2 sm:p-3">
+                            <p class="text-xs text-emerald-400 font-semibold mb-2">TLS</p>
+                            <div class="flex flex-wrap gap-1 sm:gap-2" id="tls-ports-list"></div>
                         </div>
-                        <div class="glass-light rounded-xl p-3">
-                            <p class="text-xs text-amber-400 font-semibold mb-2">🔓 Non-TLS Ports</p>
-                            <div class="flex flex-wrap gap-2" id="nontls-ports-list"></div>
+                        <div class="glass-light rounded-xl p-2 sm:p-3">
+                            <p class="text-xs text-amber-400 font-semibold mb-2">Non-TLS</p>
+                            <div class="flex flex-wrap gap-1 sm:gap-2" id="nontls-ports-list"></div>
                         </div>
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Custom IPs (Optional)</label>
-                    <textarea id="input-ips" rows="2" placeholder="One IP per line..." class="w-full px-4 py-3.5 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition resize-none"></textarea>
+                    <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Custom IPs</label>
+                    <textarea id="input-ips" rows="2" placeholder="One IP per line..." class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition resize-none"></textarea>
                 </div>
 
                 <div>
                     <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Fingerprint</label>
-                    <select id="fingerprint-select" class="w-full px-4 py-3.5 rounded-xl text-zinc-300 text-sm outline-none transition cursor-pointer bg-[rgba(255,255,255,0.05)] border border-zinc-800/50">
+                    <select id="fingerprint-select" class="w-full px-4 py-3 rounded-xl text-zinc-300 text-sm outline-none transition cursor-pointer bg-[rgba(255,255,255,0.05)] border border-zinc-800/50">
                         <option value="chrome">Chrome</option>
                         <option value="firefox">Firefox</option>
                         <option value="safari">Safari</option>
                         <option value="ios">iOS</option>
                         <option value="android">Android</option>
                         <option value="edge">Edge</option>
-                        <option value="360">360 Browser</option>
-                        <option value="qq">QQ Browser</option>
+                        <option value="360">360</option>
+                        <option value="qq">QQ</option>
                         <option value="random">Random</option>
                         <option value="randomized">Randomized</option>
                     </select>
                 </div>
 
-                <div class="flex gap-3 pt-4 border-t border-zinc-800/30">
-                    <button type="button" onclick="toggleModal(false)" class="flex-1 py-3.5 bg-white/5 hover:bg-white/10 text-zinc-400 font-semibold rounded-xl transition text-sm">Cancel</button>
-                    <button type="submit" id="submit-btn" class="flex-1 py-3.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-indigo-500/25">Create User</button>
+                <div class="flex gap-3 pt-3 sm:pt-4 border-t border-zinc-800/30">
+                    <button type="button" onclick="toggleModal(false)" class="flex-1 py-3 bg-white/5 hover:bg-white/10 text-zinc-400 font-semibold rounded-xl transition text-sm">Cancel</button>
+                    <button type="submit" id="submit-btn" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-indigo-500/25">Create</button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- QR Modal -->
-    <div id="qr-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay opacity-0 pointer-events-none transition-opacity duration-300">
-        <div class="glass rounded-3xl p-6 max-w-sm w-full transition-all duration-300 opacity-0 scale-95 text-center">
+    <div id="qr-modal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 modal-overlay opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass rounded-3xl p-4 sm:p-6 max-w-sm w-full transition-all duration-300 opacity-0 scale-95 text-center">
             <h3 id="qr-modal-title" class="text-lg font-bold text-white mb-4">QR Code</h3>
-            <div class="bg-white p-3 rounded-xl inline-block mb-4">
-                <div id="qrcode-box" class="flex justify-center items-center w-48 h-48 mx-auto"></div>
+            <div class="bg-white p-2 sm:p-3 rounded-xl inline-block mb-4">
+                <div id="qrcode-box" class="flex justify-center items-center w-40 h-40 sm:w-48 sm:h-48 mx-auto"></div>
             </div>
-            <button onclick="toggleQRModal(false)" class="w-full py-3.5 bg-white/5 hover:bg-white/10 text-zinc-400 font-semibold rounded-xl transition text-sm">Close</button>
+            <button onclick="toggleQRModal(false)" class="w-full py-3 bg-white/5 hover:bg-white/10 text-zinc-400 font-semibold rounded-xl transition text-sm">Close</button>
         </div>
     </div>
 
@@ -2558,8 +2698,9 @@ var HTML_TEMPLATES = {
             document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
             document.getElementById('page-' + page).classList.add('active');
             document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('active'));
-            document.querySelector('.sidebar-link[data-page="' + page + '"]').classList.add('active');
-            const titles = {
+            var activeLink = document.querySelector('.sidebar-link[data-page="' + page + '"]');
+            if (activeLink) activeLink.classList.add('active');
+            var titles = {
                 dashboard: ['Overview', 'System overview and statistics'],
                 users: ['Users', 'Manage your VLESS users'],
                 settings: ['Panel Settings', 'Configure panel preferences'],
@@ -2568,6 +2709,11 @@ var HTML_TEMPLATES = {
             };
             document.getElementById('page-title').innerText = titles[page][0];
             document.getElementById('page-subtitle').innerText = titles[page][1];
+            
+            // Close sidebar on mobile
+            if (window.innerWidth < 1024) {
+                toggleSidebar();
+            }
         }
 
         // ============================================
@@ -2603,14 +2749,14 @@ var HTML_TEMPLATES = {
         // PORT CHECKBOXES
         // ============================================
         function renderPortCheckboxes() {
-            const tlsContainer = document.getElementById('tls-ports-list');
-            const nonTlsContainer = document.getElementById('nontls-ports-list');
+            var tlsContainer = document.getElementById('tls-ports-list');
+            var nonTlsContainer = document.getElementById('nontls-ports-list');
 
             tlsContainer.innerHTML = tlsPorts.map(function(port) {
-                const checked = port === '443' ? 'checked' : '';
+                var checked = port === '443' ? 'checked' : '';
                 return '<label class="relative cursor-pointer">' +
                     '<input type="checkbox" name="ports" value="' + port + '" ' + checked + ' class="peer sr-only port-checkbox">' +
-                    '<div class="port-label-tls px-3 py-1.5 rounded-lg text-xs font-medium border border-zinc-700/50 bg-[rgba(255,255,255,0.03)] text-zinc-400 peer-checked:border-emerald-400 peer-checked:text-emerald-400 peer-checked:bg-emerald-500/10 transition select-none">' +
+                    '<div class="port-label-tls px-2 sm:px-3 py-1 rounded-lg text-xs font-medium border border-zinc-700/50 bg-[rgba(255,255,255,0.03)] text-zinc-400 peer-checked:border-emerald-400 peer-checked:text-emerald-400 peer-checked:bg-emerald-500/10 transition select-none">' +
                         port +
                     '</div>' +
                 '</label>';
@@ -2619,7 +2765,7 @@ var HTML_TEMPLATES = {
             nonTlsContainer.innerHTML = nonTlsPorts.map(function(port) {
                 return '<label class="relative cursor-pointer">' +
                     '<input type="checkbox" name="ports" value="' + port + '" class="peer sr-only port-checkbox">' +
-                    '<div class="port-label-nontls px-3 py-1.5 rounded-lg text-xs font-medium border border-zinc-700/50 bg-[rgba(255,255,255,0.03)] text-zinc-400 peer-checked:border-amber-400 peer-checked:text-amber-400 peer-checked:bg-amber-500/10 transition select-none">' +
+                    '<div class="port-label-nontls px-2 sm:px-3 py-1 rounded-lg text-xs font-medium border border-zinc-700/50 bg-[rgba(255,255,255,0.03)] text-zinc-400 peer-checked:border-amber-400 peer-checked:text-amber-400 peer-checked:bg-amber-500/10 transition select-none">' +
                         port +
                     '</div>' +
                 '</label>';
@@ -2630,8 +2776,8 @@ var HTML_TEMPLATES = {
         // MODAL CONTROLS
         // ============================================
         function toggleModal(show) {
-            const modal = document.getElementById('user-modal');
-            const card = document.getElementById('user-modal-card');
+            var modal = document.getElementById('user-modal');
+            var card = document.getElementById('user-modal-card');
             if (show) {
                 modal.classList.remove('opacity-0', 'pointer-events-none');
                 modal.classList.add('opacity-100', 'pointer-events-auto');
@@ -2645,10 +2791,10 @@ var HTML_TEMPLATES = {
                 isEditMode = false;
                 editingUsername = '';
                 document.getElementById('modal-title').innerText = 'Create User';
-                document.getElementById('submit-btn').innerText = 'Create User';
+                document.getElementById('submit-btn').innerText = 'Create';
                 document.getElementById('input-name').disabled = false;
                 document.getElementById('create-user-form').reset();
-                const cb443 = document.querySelector('input[name="ports"][value="443"]');
+                var cb443 = document.querySelector('input[name="ports"][value="443"]');
                 if (cb443) cb443.checked = true;
             }
         }
@@ -2657,21 +2803,21 @@ var HTML_TEMPLATES = {
             isEditMode = false;
             editingUsername = '';
             document.getElementById('modal-title').innerText = 'Create User';
-            document.getElementById('submit-btn').innerText = 'Create User';
+            document.getElementById('submit-btn').innerText = 'Create';
             document.getElementById('input-name').disabled = false;
             document.getElementById('create-user-form').reset();
             toggleModal(true);
-            setTimeout(() => {
-                const cb443 = document.querySelector('input[name="ports"][value="443"]');
+            setTimeout(function() {
+                var cb443 = document.querySelector('input[name="ports"][value="443"]');
                 if (cb443) cb443.checked = true;
             }, 100);
         }
 
         function toggleQRModal(show, link, title) {
-            const modal = document.getElementById('qr-modal');
-            const card = modal.querySelector('div');
-            const qrBox = document.getElementById('qrcode-box');
-            const titleEl = document.getElementById('qr-modal-title');
+            var modal = document.getElementById('qr-modal');
+            var card = modal.querySelector('div');
+            var qrBox = document.getElementById('qrcode-box');
+            var titleEl = document.getElementById('qr-modal-title');
             if (show) {
                 titleEl.innerText = title || 'QR Code';
                 qrBox.innerHTML = '';
@@ -2697,12 +2843,12 @@ var HTML_TEMPLATES = {
         // ============================================
         async function controlXray(action) {
             try {
-                const res = await fetch('/api/xray', {
+                var res = await fetch('/api/xray', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action })
                 });
-                const data = await res.json();
+                var data = await res.json();
                 if (data.success) {
                     alert('✅ Xray ' + action + 'ed successfully!');
                     updateXrayStatus();
@@ -2716,12 +2862,12 @@ var HTML_TEMPLATES = {
 
         async function updateXrayStatus() {
             try {
-                const res = await fetch('/api/xray/status');
-                const data = await res.json();
+                var res = await fetch('/api/xray/status');
+                var data = await res.json();
                 if (data.running) {
-                    const uptime = data.uptime;
-                    const hours = Math.floor(uptime / 3600);
-                    const minutes = Math.floor((uptime % 3600) / 60);
+                    var uptime = data.uptime;
+                    var hours = Math.floor(uptime / 3600);
+                    var minutes = Math.floor((uptime % 3600) / 60);
                     document.getElementById('xray-uptime').innerText = hours > 0 ? hours + 'h ' + minutes + 'm' : minutes + 'm';
                 } else {
                     document.getElementById('xray-uptime').innerText = 'Stopped';
@@ -2734,19 +2880,19 @@ var HTML_TEMPLATES = {
         // ============================================
         async function loadAdminsList() {
             try {
-                const res = await fetch('/api/admins');
-                const data = await res.json();
-                const container = document.getElementById('admins-list');
+                var res = await fetch('/api/admins');
+                var data = await res.json();
+                var container = document.getElementById('admins-list');
                 if (data.admins && data.admins.length > 0) {
-                    container.innerHTML = data.admins.map(a => 
-                        '<div class="flex items-center justify-between p-3 glass-light rounded-xl">' +
+                    container.innerHTML = data.admins.map(function(a) {
+                        return '<div class="flex items-center justify-between p-3 glass-light rounded-xl">' +
                             '<span class="text-white text-sm">' + a.username + '</span>' +
                             '<div class="flex items-center gap-2">' +
                                 '<span class="text-xs text-zinc-500">' + new Date(a.created_at).toLocaleDateString() + '</span>' +
                                 '<button onclick="deleteAdmin(' + a.id + ')" class="text-red-400 hover:text-red-300 text-xs font-semibold">Remove</button>' +
                             '</div>' +
-                        '</div>'
-                    ).join('');
+                        '</div>';
+                    }).join('');
                 } else {
                     container.innerHTML = '<p class="text-zinc-400 text-sm">No admins found.</p>';
                 }
@@ -2756,19 +2902,19 @@ var HTML_TEMPLATES = {
         }
 
         async function addAdmin() {
-            const username = document.getElementById('admin-username').value.trim();
-            const password = document.getElementById('admin-password').value;
+            var username = document.getElementById('admin-username').value.trim();
+            var password = document.getElementById('admin-password').value;
             if (!username || !password || password.length < 4) {
                 alert('❌ Username and password (min 4 chars) required');
                 return;
             }
             try {
-                const res = await fetch('/api/admins', {
+                var res = await fetch('/api/admins', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
-                const data = await res.json();
+                var data = await res.json();
                 if (data.success) {
                     alert('✅ Admin added successfully!');
                     document.getElementById('admin-username').value = '';
@@ -2785,12 +2931,12 @@ var HTML_TEMPLATES = {
         async function deleteAdmin(id) {
             if (!confirm('Are you sure you want to remove this admin?')) return;
             try {
-                const res = await fetch('/api/admins', {
+                var res = await fetch('/api/admins', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id })
                 });
-                const data = await res.json();
+                var data = await res.json();
                 if (data.success) {
                     alert('✅ Admin removed!');
                     loadAdminsList();
@@ -2803,100 +2949,84 @@ var HTML_TEMPLATES = {
         }
 
         // ============================================
-        // USER FUNCTIONS
+        // USER FUNCTIONS (Shortened for space)
         // ============================================
         function getVlessLink(username) {
-            const user = allUsers.find(u => u.username === username);
+            var user = allUsers.find(function(u) { return u.username === username; });
             if (!user) return '';
-            const host = window.location.hostname;
-            let ips = [host];
+            var host = window.location.hostname;
+            var ips = [host];
             if (user.ips) {
-                ips = user.ips.split('\\n').map(ip => ip.trim()).filter(ip => ip.length > 0);
+                ips = user.ips.split('\\n').map(function(ip) { return ip.trim(); }).filter(function(ip) { return ip.length > 0; });
                 if (ips.length === 0) ips = [host];
             }
-            const ports = String(user.port || '443').split(',').map(p => p.trim()).filter(p => p.length > 0);
-            const fp = user.fingerprint || 'chrome';
-            
-            const now = new Date();
-            const created = new Date(user.created_at);
-            const expiryDays = user.expiry_days || 30;
-            const expiryDate = new Date(created.getTime() + expiryDays * 24 * 60 * 60 * 1000);
-            const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
-            const totalGB = user.limit_gb || 0;
-            const usedGB = user.used_gb || 0;
-            const leftGB = Math.max(0, totalGB - usedGB);
-            const expiryDateStr = expiryDate.toISOString().split('T')[0].replace(/-/g, '/');
-            
-            const links = [];
-            ports.forEach((portStr) => {
-                const isTlsPort = tlsPorts.includes(portStr);
-                const tlsVal = isTlsPort ? 'tls' : 'none';
-                
-                const remark1 = '⏳ INFO | ' + user.username.toUpperCase() + ' STATUS | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left | ' + (daysLeft > 0 ? '🟢 ACTIVE' : '🔴 EXPIRED');
+            var ports = String(user.port || '443').split(',').map(function(p) { return p.trim(); }).filter(function(p) { return p.length > 0; });
+            var fp = user.fingerprint || 'chrome';
+            var now = new Date();
+            var created = new Date(user.created_at);
+            var expiryDays = user.expiry_days || 30;
+            var expiryDate = new Date(created.getTime() + expiryDays * 24 * 60 * 60 * 1000);
+            var daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+            var totalGB = user.limit_gb || 0;
+            var usedGB = user.used_gb || 0;
+            var leftGB = Math.max(0, totalGB - usedGB);
+            var expiryDateStr = expiryDate.toISOString().split('T')[0].replace(/-/g, '/');
+            var links = [];
+            ports.forEach(function(portStr) {
+                var isTlsPort = tlsPorts.includes(portStr);
+                var tlsVal = isTlsPort ? 'tls' : 'none';
+                var remark1 = '⏳ INFO | ' + user.username.toUpperCase() + ' STATUS | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left | ' + (daysLeft > 0 ? '🟢 ACTIVE' : '🔴 EXPIRED');
                 links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ips[0] + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
-                
-                const usedFormatted = usedGB >= 1 ? usedGB.toFixed(1) + 'GB' : (usedGB * 1024).toFixed(0) + 'MB';
-                const leftFormatted = leftGB >= 1 ? leftGB.toFixed(1) + 'GB' : (leftGB * 1024).toFixed(0) + 'MB';
-                const totalFormatted = totalGB >= 1 ? totalGB + 'GB' : 'Unlimited';
-                const remark2 = '📊 INFO | ' + user.username.toUpperCase() + ' TRAFFIC | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used | 🎯 ' + leftFormatted + ' Left';
+                var usedFormatted = usedGB >= 1 ? usedGB.toFixed(1) + 'GB' : (usedGB * 1024).toFixed(0) + 'MB';
+                var leftFormatted = leftGB >= 1 ? leftGB.toFixed(1) + 'GB' : (leftGB * 1024).toFixed(0) + 'MB';
+                var totalFormatted = totalGB >= 1 ? totalGB + 'GB' : 'Unlimited';
+                var remark2 = '📊 INFO | ' + user.username.toUpperCase() + ' TRAFFIC | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used | 🎯 ' + leftFormatted + ' Left';
                 links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ips[0] + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
             });
             return links.join('\\n');
         }
 
-        function getSubLink(username) {
-            return window.location.origin + '/feed/' + encodeURIComponent(username);
-        }
-
-        function getJsonSubLink(username) {
-            return window.location.origin + '/feed/json/' + encodeURIComponent(username);
-        }
-
-        function getStatusLink(username) {
-            return window.location.origin + '/status/' + encodeURIComponent(username);
-        }
+        function getSubLink(username) { return window.location.origin + '/feed/' + encodeURIComponent(username); }
+        function getJsonSubLink(username) { return window.location.origin + '/feed/json/' + encodeURIComponent(username); }
+        function getStatusLink(username) { return window.location.origin + '/status/' + encodeURIComponent(username); }
 
         function copySubLink(encodedUsername) {
-            const username = decodeURIComponent(encodedUsername);
-            navigator.clipboard.writeText(getSubLink(username)).then(() => alert('✅ Text subscription link copied!'));
+            var username = decodeURIComponent(encodedUsername);
+            navigator.clipboard.writeText(getSubLink(username)).then(function() { alert('✅ Text subscription link copied!'); });
         }
-
         function copyJsonSubLink(encodedUsername) {
-            const username = decodeURIComponent(encodedUsername);
-            navigator.clipboard.writeText(getJsonSubLink(username)).then(() => alert('✅ JSON subscription link copied!'));
+            var username = decodeURIComponent(encodedUsername);
+            navigator.clipboard.writeText(getJsonSubLink(username)).then(function() { alert('✅ JSON subscription link copied!'); });
         }
-
         function copyStatusLink(encodedUsername) {
-            const username = decodeURIComponent(encodedUsername);
-            navigator.clipboard.writeText(getStatusLink(username)).then(() => alert('✅ Status page link copied!'));
+            var username = decodeURIComponent(encodedUsername);
+            navigator.clipboard.writeText(getStatusLink(username)).then(function() { alert('✅ Status page link copied!'); });
         }
-
         function copyConfig(encodedUsername) {
-            const username = decodeURIComponent(encodedUsername);
-            const link = getVlessLink(username);
+            var username = decodeURIComponent(encodedUsername);
+            var link = getVlessLink(username);
             if (!link) return;
-            navigator.clipboard.writeText(link).then(() => alert('✅ VLESS config copied!'));
+            navigator.clipboard.writeText(link).then(function() { alert('✅ VLESS config copied!'); });
         }
-
         function copyJsonConfig(encodedUsername) {
-            const username = decodeURIComponent(encodedUsername);
-            const user = allUsers.find(u => u.username === username);
+            var username = decodeURIComponent(encodedUsername);
+            var user = allUsers.find(function(u) { return u.username === username; });
             if (!user) return;
-            const host = window.location.hostname;
-            let ips = [host];
+            var host = window.location.hostname;
+            var ips = [host];
             if (user.ips) {
-                ips = user.ips.split('\\n').map(ip => ip.trim()).filter(ip => ip.length > 0);
+                ips = user.ips.split('\\n').map(function(ip) { return ip.trim(); }).filter(function(ip) { return ip.length > 0; });
                 if (ips.length === 0) ips = [host];
             }
-            const ports = String(user.port || '443').split(',').map(p => p.trim()).filter(p => p.length > 0);
-            const fp = user.fingerprint || 'chrome';
-            const configArray = [];
-            ips.forEach((ip) => {
-                ports.forEach((portStr) => {
-                    const isTlsPort = tlsPorts.includes(portStr);
-                    const tlsVal = isTlsPort ? 'tls' : 'none';
-                    const remark = user.username + ' | ' + portStr + ' | @VoidLatency | 🏁';
-                    const jsonConfig = {
+            var ports = String(user.port || '443').split(',').map(function(p) { return p.trim(); }).filter(function(p) { return p.length > 0; });
+            var fp = user.fingerprint || 'chrome';
+            var configArray = [];
+            ips.forEach(function(ip) {
+                ports.forEach(function(portStr) {
+                    var isTlsPort = tlsPorts.includes(portStr);
+                    var tlsVal = isTlsPort ? 'tls' : 'none';
+                    var remark = user.username + ' | ' + portStr + ' | @VoidLatency | 🏁';
+                    var jsonConfig = {
                         "remarks": remark,
                         "version": { "min": "25.10.15" },
                         "log": { "loglevel": "none" },
@@ -2980,19 +3110,19 @@ var HTML_TEMPLATES = {
                     configArray.push(jsonConfig);
                 });
             });
-            navigator.clipboard.writeText(JSON.stringify(configArray, null, 2)).then(() => alert('✅ JSON config copied!'));
+            navigator.clipboard.writeText(JSON.stringify(configArray, null, 2)).then(function() { alert('✅ JSON config copied!'); });
         }
 
         function showQR(encodedUsername) {
-            const username = decodeURIComponent(encodedUsername);
-            const link = getVlessLink(username);
+            var username = decodeURIComponent(encodedUsername);
+            var link = getVlessLink(username);
             if (!link) return;
             toggleQRModal(true, link, 'VLESS Config QR - ' + username);
         }
 
         function editUser(encodedUsername) {
-            const username = decodeURIComponent(encodedUsername);
-            const user = allUsers.find(u => u.username === username);
+            var username = decodeURIComponent(encodedUsername);
+            var user = allUsers.find(function(u) { return u.username === username; });
             if (!user) {
                 alert('❌ User not found!');
                 return;
@@ -3000,30 +3130,30 @@ var HTML_TEMPLATES = {
             isEditMode = true;
             editingUsername = username;
             document.getElementById('modal-title').innerText = 'Edit User: ' + username;
-            document.getElementById('submit-btn').innerText = 'Save Changes';
+            document.getElementById('submit-btn').innerText = 'Save';
             document.getElementById('input-name').value = username;
             document.getElementById('input-name').disabled = true;
             document.getElementById('input-limit').value = user.limit_gb || '';
             document.getElementById('input-expiry').value = user.expiry_days || '';
             document.getElementById('input-ips').value = user.ips || '';
             document.getElementById('fingerprint-select').value = user.fingerprint || 'chrome';
-            const userPorts = String(user.port || '').split(',').map(p => p.trim());
-            document.querySelectorAll('input[name="ports"]').forEach(cb => {
+            var userPorts = String(user.port || '').split(',').map(function(p) { return p.trim(); });
+            document.querySelectorAll('input[name="ports"]').forEach(function(cb) {
                 cb.checked = userPorts.includes(cb.value);
             });
             toggleModal(true);
         }
 
         async function deleteUser(encodedUsername) {
-            const username = decodeURIComponent(encodedUsername);
+            var username = decodeURIComponent(encodedUsername);
             if (!confirm('⚠️ Are you sure you want to delete user: ' + username + '?')) return;
             try {
-                const response = await fetch('/api/users/' + encodeURIComponent(username), { method: 'DELETE' });
+                var response = await fetch('/api/users/' + encodeURIComponent(username), { method: 'DELETE' });
                 if (response.ok) {
                     alert('✅ User deleted successfully!');
                     await loadUsers(true);
                 } else {
-                    const errData = await response.json();
+                    var errData = await response.json();
                     alert('❌ Error: ' + (errData.error || 'Operation failed'));
                 }
             } catch (err) {
@@ -3032,9 +3162,9 @@ var HTML_TEMPLATES = {
         }
 
         async function toggleUserStatus(encodedUsername) {
-            const username = decodeURIComponent(encodedUsername);
+            var username = decodeURIComponent(encodedUsername);
             try {
-                const response = await fetch('/api/users/' + encodeURIComponent(username), {
+                var response = await fetch('/api/users/' + encodeURIComponent(username), {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ toggle_only: true })
@@ -3042,7 +3172,7 @@ var HTML_TEMPLATES = {
                 if (response.ok) {
                     await loadUsers(true);
                 } else {
-                    const errData = await response.json();
+                    var errData = await response.json();
                     alert('❌ Error: ' + (errData.error || 'Operation failed'));
                 }
             } catch (err) {
@@ -3055,22 +3185,22 @@ var HTML_TEMPLATES = {
         // ============================================
         function getFlagEmoji(countryCode) {
             if (!countryCode) return '🌐';
-            const codePoints = countryCode.toUpperCase().split('').map(char => 127397 + char.charCodeAt(0));
+            var codePoints = countryCode.toUpperCase().split('').map(function(char) { return 127397 + char.charCodeAt(0); });
             try {
-                return String.fromCodePoint(...codePoints);
+                return String.fromCodePoint.apply(String, codePoints);
             } catch (e) {
                 return '🌐';
             }
         }
 
         function renderLocationsUI(locations, activeIata) {
-            const select = document.getElementById('location-select');
-            locations.sort((a, b) => (a.cca2 || '').localeCompare(b.cca2 || ''));
-            let html = '<option value="">🌐 Default Location</option>';
-            locations.forEach(loc => {
+            var select = document.getElementById('location-select');
+            locations.sort(function(a, b) { return (a.cca2 || '').localeCompare(b.cca2 || ''); });
+            var html = '<option value="">🌐 Default Location</option>';
+            locations.forEach(function(loc) {
                 if (loc.iata && loc.city) {
-                    const flag = getFlagEmoji(loc.cca2);
-                    const isSelected = loc.iata.toUpperCase() === activeIata.toUpperCase() ? 'selected' : '';
+                    var flag = getFlagEmoji(loc.cca2);
+                    var isSelected = loc.iata.toUpperCase() === activeIata.toUpperCase() ? 'selected' : '';
                     html += '<option value="' + loc.iata + '" ' + isSelected + '>' + flag + ' ' + loc.city + ' (' + loc.iata + ')</option>';
                 }
             });
@@ -3078,13 +3208,13 @@ var HTML_TEMPLATES = {
         }
 
         async function loadLocations() {
-            const select = document.getElementById('location-select');
-            const cachedLocations = localStorage.getItem('cached_locations_list');
-            const cachedActiveIata = localStorage.getItem('cached_active_iata') || '';
-            let hasCachedLocs = false;
+            var select = document.getElementById('location-select');
+            var cachedLocations = localStorage.getItem('cached_locations_list');
+            var cachedActiveIata = localStorage.getItem('cached_active_iata') || '';
+            var hasCachedLocs = false;
             if (cachedLocations) {
                 try {
-                    const parsedLocs = JSON.parse(cachedLocations);
+                    var parsedLocs = JSON.parse(cachedLocations);
                     if (Array.isArray(parsedLocs) && parsedLocs.length > 0) {
                         renderLocationsUI(parsedLocs, cachedActiveIata);
                         hasCachedLocs = true;
@@ -3092,10 +3222,10 @@ var HTML_TEMPLATES = {
                 } catch(e) {}
             }
             try {
-                const statusRes = await fetch('/api/proxy-ip');
-                let activeIata = '';
+                var statusRes = await fetch('/api/proxy-ip');
+                var activeIata = '';
                 if (statusRes.ok) {
-                    const statusData = await statusRes.json();
+                    var statusData = await statusRes.json();
                     activeIata = statusData.iata || '';
                     localStorage.setItem('cached_active_iata', activeIata);
                     if(statusData.frag_len) {
@@ -3107,9 +3237,9 @@ var HTML_TEMPLATES = {
                         document.getElementById('frag-interval').value = statusData.frag_int;
                     }
                 }
-                const res = await fetch('/locations');
+                var res = await fetch('/locations');
                 if (!res.ok) throw new Error();
-                const locations = await res.json();
+                var locations = await res.json();
                 localStorage.setItem('cached_locations_list', JSON.stringify(locations));
                 renderLocationsUI(locations, activeIata);
             } catch (err) {
@@ -3123,32 +3253,32 @@ var HTML_TEMPLATES = {
         // SETTINGS
         // ============================================
         async function saveSettings() {
-            const select = document.getElementById('location-select');
-            const fragLen = document.getElementById('frag-length').value || "20-30";
-            const fragInt = document.getElementById('frag-interval').value || "1-2";
-            const iata = select.value;
-            const btn = document.getElementById('save-settings-btn');
+            var select = document.getElementById('location-select');
+            var fragLen = document.getElementById('frag-length').value || "20-30";
+            var fragInt = document.getElementById('frag-interval').value || "1-2";
+            var iata = select.value;
+            var btn = document.getElementById('save-settings-btn');
             btn.disabled = true;
             btn.innerText = 'Saving...';
             try {
-                let resolvedIp = 'proxyip.cmliussss.net';
+                var resolvedIp = 'proxyip.cmliussss.net';
                 if (iata) {
-                    const domain = iata.toLowerCase() + '.proxyip.cmliussss.net';
-                    const dnsRes = await fetch('https://cloudflare-dns.com/dns-query?name=' + domain + '&type=A', {
+                    var domain = iata.toLowerCase() + '.proxyip.cmliussss.net';
+                    var dnsRes = await fetch('https://cloudflare-dns.com/dns-query?name=' + domain + '&type=A', {
                         headers: { 'accept': 'application/dns-json' }
                     });
                     resolvedIp = domain;
                     if (dnsRes.ok) {
-                        const dnsData = await dnsRes.json();
+                        var dnsData = await dnsRes.json();
                         if (dnsData.Answer && dnsData.Answer.length > 0) {
-                            const ips = dnsData.Answer.filter(ans => ans.type === 1).map(ans => ans.data);
+                            var ips = dnsData.Answer.filter(function(ans) { return ans.type === 1; }).map(function(ans) { return ans.data; });
                             if (ips.length > 0) {
                                 resolvedIp = ips[Math.floor(Math.random() * ips.length)];
                             }
                         }
                     }
                 }
-                const response = await fetch('/api/proxy-ip', {
+                var response = await fetch('/api/proxy-ip', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ proxy_ip: resolvedIp, iata: iata ? iata.toUpperCase() : '', frag_len: fragLen, frag_int: fragInt })
@@ -3169,9 +3299,9 @@ var HTML_TEMPLATES = {
         }
 
         async function changeAdminPassword() {
-            const currentPwd = document.getElementById('change-pwd-current').value;
-            const newPwd = document.getElementById('change-pwd-new').value;
-            const btn = document.getElementById('change-pwd-btn');
+            var currentPwd = document.getElementById('change-pwd-current').value;
+            var newPwd = document.getElementById('change-pwd-new').value;
+            var btn = document.getElementById('change-pwd-btn');
             if (!currentPwd || !newPwd) {
                 alert('❌ Please enter both current and new password');
                 return;
@@ -3183,12 +3313,12 @@ var HTML_TEMPLATES = {
             btn.disabled = true;
             btn.innerText = 'Updating...';
             try {
-                const response = await fetch('/api/change-password', {
+                var response = await fetch('/api/change-password', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ current_password: currentPwd, new_password: newPwd })
                 });
-                const data = await response.json();
+                var data = await response.json();
                 if (response.ok && data.success) {
                     alert('✅ Password updated successfully!');
                     document.getElementById('change-pwd-current').value = '';
@@ -3219,18 +3349,18 @@ var HTML_TEMPLATES = {
         // USER LOADING & RENDERING
         // ============================================
         async function loadUsers(silent) {
-            const loadingState = document.getElementById('loading-state');
-            const tableContainer = document.getElementById('users-table-container');
-            const emptyState = document.getElementById('empty-state');
+            var loadingState = document.getElementById('loading-state');
+            var tableContainer = document.getElementById('users-table-container');
+            var emptyState = document.getElementById('empty-state');
             if (!silent) {
                 loadingState.classList.remove('hidden');
                 tableContainer.classList.add('hidden');
                 emptyState.classList.add('hidden');
             }
             try {
-                const res = await fetch('/api/users?t=' + Date.now());
+                var res = await fetch('/api/users?t=' + Date.now());
                 if (!res.ok) throw new Error();
-                const data = await res.json();
+                var data = await res.json();
                 renderUsersUI(data);
             } catch (err) {
                 if (!silent) {
@@ -3241,19 +3371,19 @@ var HTML_TEMPLATES = {
 
         function renderUsersUI(data) {
             try {
-                const users = data.users || [];
+                var users = data.users || [];
                 allUsers = users;
-                const serverTime = data.serverTime || Date.now();
+                var serverTime = data.serverTime || Date.now();
                 lastServerTime = serverTime;
-                const totalUsersCount = users.length;
-                const activeUsersCount = users.filter(u => u.is_online === 1).length;
-                const totalGbUsage = users.reduce((sum, u) => sum + (u.used_gb || 0), 0);
+                var totalUsersCount = users.length;
+                var activeUsersCount = users.filter(function(u) { return u.is_online === 1; }).length;
+                var totalGbUsage = users.reduce(function(sum, u) { return sum + (u.used_gb || 0); }, 0);
                 document.getElementById('stat-total-users').innerText = totalUsersCount;
                 document.getElementById('stat-active-users').innerText = activeUsersCount;
                 document.getElementById('stat-total-usage').innerText = totalGbUsage < 1 ? (totalGbUsage * 1024).toFixed(0) + ' MB' : totalGbUsage.toFixed(2) + ' GB';
-                const topUser = users.reduce((max, u) => (u.used_gb || 0) > (max.used_gb || 0) ? u : max, { username: 'None', used_gb: 0 });
+                var topUser = users.reduce(function(max, u) { return (u.used_gb || 0) > (max.used_gb || 0) ? u : max; }, { username: 'None', used_gb: 0 });
                 document.getElementById('stat-top-user').innerText = topUser.username;
-                const topUsage = topUser.used_gb || 0;
+                var topUsage = topUser.used_gb || 0;
                 document.getElementById('stat-top-user-usage').innerText = topUsage < 1 ? (topUsage * 1024).toFixed(0) + ' MB used' : topUsage.toFixed(2) + ' GB used';
                 filterAndRenderUsers();
                 updateXrayStatus();
@@ -3264,26 +3394,26 @@ var HTML_TEMPLATES = {
 
         function filterAndRenderUsers() {
             if (!allUsers) return;
-            const searchQuery = (document.getElementById('search-input').value || '').toLowerCase().trim();
-            const filterStatus = document.getElementById('filter-status').value;
-            const sortVal = document.getElementById('sort-users').value;
-            const serverTime = lastServerTime || Date.now();
-            let filtered = [...allUsers];
+            var searchQuery = (document.getElementById('search-input').value || '').toLowerCase().trim();
+            var filterStatus = document.getElementById('filter-status').value;
+            var sortVal = document.getElementById('sort-users').value;
+            var serverTime = lastServerTime || Date.now();
+            var filtered = allUsers.slice();
             if (searchQuery) {
-                filtered = filtered.filter(u => 
-                    (u.username || '').toLowerCase().includes(searchQuery) || 
-                    (u.uuid || '').toLowerCase().includes(searchQuery)
-                );
+                filtered = filtered.filter(function(u) {
+                    return (u.username || '').toLowerCase().includes(searchQuery) || 
+                           (u.uuid || '').toLowerCase().includes(searchQuery);
+                });
             }
             if (filterStatus !== 'all') {
-                filtered = filtered.filter(u => {
-                    const isOnline = u.is_online === 1;
-                    const isActive = u.is_active === 1;
-                    let isExpired = false;
+                filtered = filtered.filter(function(u) {
+                    var isOnline = u.is_online === 1;
+                    var isActive = u.is_active === 1;
+                    var isExpired = false;
                     if (u.limit_gb && u.used_gb >= u.limit_gb) isExpired = true;
                     if (u.expiry_days && u.created_at) {
-                        const created = new Date(u.created_at);
-                        const expiryDate = new Date(created.getTime() + (u.expiry_days * 24 * 60 * 60 * 1000));
+                        var created = new Date(u.created_at);
+                        var expiryDate = new Date(created.getTime() + (u.expiry_days * 24 * 60 * 60 * 1000));
                         if (new Date(serverTime) > expiryDate) isExpired = true;
                     }
                     if (filterStatus === 'active') return isActive && !isExpired;
@@ -3294,17 +3424,17 @@ var HTML_TEMPLATES = {
                     return true;
                 });
             }
-            filtered.sort((a, b) => {
+            filtered.sort(function(a, b) {
                 if (sortVal === 'newest') return b.id - a.id;
                 if (sortVal === 'name') return (a.username || '').localeCompare(b.username || '');
                 if (sortVal === 'usage-desc') return (b.used_gb || 0) - (a.used_gb || 0);
                 if (sortVal === 'usage-asc') return (a.used_gb || 0) - (b.used_gb || 0);
                 if (sortVal === 'expiry-asc') {
-                    const getRemaining = (u) => {
+                    var getRemaining = function(u) {
                         if (!u.expiry_days) return Infinity;
                         if (!u.created_at) return Infinity;
-                        const created = new Date(u.created_at);
-                        const expiryDate = new Date(created.getTime() + (u.expiry_days * 24 * 60 * 60 * 1000));
+                        var created = new Date(u.created_at);
+                        var expiryDate = new Date(created.getTime() + (u.expiry_days * 24 * 60 * 60 * 1000));
                         return expiryDate - new Date(serverTime);
                     };
                     return getRemaining(a) - getRemaining(b);
@@ -3315,10 +3445,10 @@ var HTML_TEMPLATES = {
         }
 
         function renderFilteredUsers(users, serverTime) {
-            const loadingState = document.getElementById('loading-state');
-            const tableContainer = document.getElementById('users-table-container');
-            const emptyState = document.getElementById('empty-state');
-            const tbody = document.getElementById('users-tbody');
+            var loadingState = document.getElementById('loading-state');
+            var tableContainer = document.getElementById('users-table-container');
+            var emptyState = document.getElementById('empty-state');
+            var tbody = document.getElementById('users-tbody');
             if (users.length === 0) {
                 loadingState.classList.add('hidden');
                 emptyState.classList.remove('hidden');
@@ -3332,113 +3462,111 @@ var HTML_TEMPLATES = {
                 loadingState.classList.add('hidden');
                 emptyState.classList.add('hidden');
                 tableContainer.classList.remove('hidden');
-                tbody.innerHTML = users.map(user => {
-                    const createdDate = user.created_at ? new Date(user.created_at).toLocaleDateString() : '-';
-                    let daysRemaining = 'Unlimited';
-                    let daysPercent = 100;
+                tbody.innerHTML = users.map(function(user) {
+                    var createdDate = user.created_at ? new Date(user.created_at).toLocaleDateString() : '-';
+                    var daysRemaining = 'Unlimited';
+                    var daysPercent = 100;
                     if (user.expiry_days) {
                         if (user.created_at) {
-                            const created = new Date(user.created_at);
-                            const expiryDate = new Date(created.getTime() + (user.expiry_days * 24 * 60 * 60 * 1000));
-                            const diffDays = Math.ceil((expiryDate - new Date(serverTime)) / (1000 * 60 * 60 * 24));
+                            var created = new Date(user.created_at);
+                            var expiryDate = new Date(created.getTime() + (user.expiry_days * 24 * 60 * 60 * 1000));
+                            var diffDays = Math.ceil((expiryDate - new Date(serverTime)) / (1000 * 60 * 60 * 24));
                             daysRemaining = diffDays > 0 ? diffDays : 0;
                             daysPercent = Math.max(0, Math.min(100, (daysRemaining / user.expiry_days) * 100));
                         } else {
                             daysRemaining = user.expiry_days;
                         }
                     }
-                    const usedGb = user.used_gb || 0;
-                    const formattedUsed = usedGb < 1 ? (usedGb * 1024).toFixed(0) + ' MB' : usedGb.toFixed(2) + ' GB';
-                    let volumeHtml = '';
+                    var usedGb = user.used_gb || 0;
+                    var formattedUsed = usedGb < 1 ? (usedGb * 1024).toFixed(0) + ' MB' : usedGb.toFixed(2) + ' GB';
+                    var volumeHtml = '';
                     if (user.limit_gb) {
-                        const limitPercent = Math.min((usedGb / user.limit_gb) * 100, 100);
-                        const limitHue = 120 - (limitPercent * 1.2);
-                        const formattedLimit = user.limit_gb < 1 ? (user.limit_gb * 1024).toFixed(0) + ' MB' : user.limit_gb + ' GB';
-                        volumeHtml = '<div class="flex flex-col gap-1.5 w-full min-w-[130px]">' +
-                            '<div class="flex justify-between text-[11px] text-zinc-400 font-medium">' +
+                        var limitPercent = Math.min((usedGb / user.limit_gb) * 100, 100);
+                        var limitHue = 120 - (limitPercent * 1.2);
+                        var formattedLimit = user.limit_gb < 1 ? (user.limit_gb * 1024).toFixed(0) + ' MB' : user.limit_gb + ' GB';
+                        volumeHtml = '<div class="flex flex-col gap-1 w-full min-w-[100px]">' +
+                            '<div class="flex justify-between text-[10px] sm:text-[11px] text-zinc-400 font-medium">' +
                                 '<span>Used: ' + formattedUsed + '</span>' +
                                 '<span>Total: ' + formattedLimit + '</span>' +
                             '</div>' +
-                            '<div class="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">' +
-                                '<div class="h-1.5 rounded-full transition-all duration-500" style="width: ' + limitPercent + '%; background-color: hsl(' + limitHue + ', 80%, 45%)"></div>' +
+                            '<div class="w-full bg-zinc-800 rounded-full h-1 overflow-hidden">' +
+                                '<div class="h-1 rounded-full transition-all duration-500" style="width: ' + limitPercent + '%; background-color: hsl(' + limitHue + ', 80%, 45%)"></div>' +
                             '</div>' +
                         '</div>';
                     } else {
-                        volumeHtml = '<div class="flex flex-col gap-1.5 w-full min-w-[130px]">' +
-                            '<div class="flex justify-between text-[11px] text-zinc-400 font-medium">' +
+                        volumeHtml = '<div class="flex flex-col gap-1 w-full min-w-[100px]">' +
+                            '<div class="flex justify-between text-[10px] sm:text-[11px] text-zinc-400 font-medium">' +
                                 '<span>Used: ' + formattedUsed + '</span>' +
                                 '<span>Total: Unlimited</span>' +
                             '</div>' +
-                            '<div class="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">' +
-                                '<div class="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style="width: 100%"></div>' +
+                            '<div class="w-full bg-zinc-800 rounded-full h-1 overflow-hidden">' +
+                                '<div class="bg-blue-500 h-1 rounded-full transition-all duration-500" style="width: 100%"></div>' +
                             '</div>' +
                         '</div>';
                     }
-                    let expiryHtml = '';
+                    var expiryHtml = '';
                     if (user.expiry_days) {
-                        const expiryHue = daysPercent * 1.2;
-                        expiryHtml = '<div class="flex flex-col gap-1.5 w-full min-w-[130px]">' +
-                            '<div class="flex justify-between text-[11px] text-zinc-400 font-medium">' +
+                        var expiryHue = daysPercent * 1.2;
+                        expiryHtml = '<div class="flex flex-col gap-1 w-full min-w-[100px]">' +
+                            '<div class="flex justify-between text-[10px] sm:text-[11px] text-zinc-400 font-medium">' +
                                 '<span>Remaining: ' + daysRemaining + ' days</span>' +
                                 '<span>Total: ' + user.expiry_days + ' days</span>' +
                             '</div>' +
-                            '<div class="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden flex justify-end">' +
-                                '<div class="h-1.5 rounded-full transition-all duration-500" style="width: ' + daysPercent + '%; background-color: hsl(' + expiryHue + ', 80%, 45%)"></div>' +
+                            '<div class="w-full bg-zinc-800 rounded-full h-1 overflow-hidden flex justify-end">' +
+                                '<div class="h-1 rounded-full transition-all duration-500" style="width: ' + daysPercent + '%; background-color: hsl(' + expiryHue + ', 80%, 45%)"></div>' +
                             '</div>' +
                         '</div>';
                     } else {
-                        expiryHtml = '<div class="flex flex-col gap-1.5 w-full min-w-[130px]">' +
-                            '<div class="flex justify-between text-[11px] text-zinc-400 font-medium">' +
+                        expiryHtml = '<div class="flex flex-col gap-1 w-full min-w-[100px]">' +
+                            '<div class="flex justify-between text-[10px] sm:text-[11px] text-zinc-400 font-medium">' +
                                 '<span>Remaining: Unlimited</span>' +
                                 '<span>Total: Unlimited</span>' +
                             '</div>' +
-                            '<div class="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden flex justify-end">' +
-                                '<div class="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style="width: 100%"></div>' +
+                            '<div class="w-full bg-zinc-800 rounded-full h-1 overflow-hidden flex justify-end">' +
+                                '<div class="bg-blue-500 h-1 rounded-full transition-all duration-500" style="width: 100%"></div>' +
                             '</div>' +
                         '</div>';
                     }
-                    const statusBtnColor = user.is_active === 0 ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-amber-400 hover:bg-amber-500/10';
-                    const statusBtnTitle = user.is_active === 0 ? 'Activate user' : 'Deactivate user';
-                    const statusBtnIcon = user.is_active === 0 
-                        ? '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
-                        : '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
-                    const statusClass = user.is_active === 0 ? 'badge-danger' : 'badge-success';
-                    const statusText = user.is_active === 0 ? 'Inactive' : 'Active';
-                    const onlineClass = user.is_online === 1 ? 'badge-success' : 'badge';
-                    const onlineText = user.is_online === 1 ? '● Online' : 'Offline';
-                    const userDisplay = user.username + ' | ' + user.port + ' | @VoidLatency | 🏁';
+                    var statusBtnColor = user.is_active === 0 ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-amber-400 hover:bg-amber-500/10';
+                    var statusBtnTitle = user.is_active === 0 ? 'Activate' : 'Deactivate';
+                    var statusBtnIcon = user.is_active === 0 
+                        ? '<svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
+                        : '<svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+                    var statusClass = user.is_active === 0 ? 'badge-danger' : 'badge-success';
+                    var statusText = user.is_active === 0 ? 'Inactive' : 'Active';
+                    var onlineClass = user.is_online === 1 ? 'badge-success' : 'badge';
+                    var onlineText = user.is_online === 1 ? '● Online' : 'Offline';
+                    var userDisplay = user.username + ' | ' + user.port + ' | @VoidLatency';
                     return '<tr class="hover:bg-white/5 border-b border-zinc-800/30">' +
-                        '<td class="p-3">' +
-                            '<div class="flex flex-col gap-2">' +
-                                '<div class="flex items-center gap-2">' +
-                                    '<span class="font-bold text-white text-sm">' + userDisplay + '</span>' +
-                                '</div>' +
-                                '<div class="flex items-center gap-1.5">' +
+                        '<td class="p-2 sm:p-3">' +
+                            '<div class="flex flex-col gap-1">' +
+                                '<span class="font-bold text-white text-xs sm:text-sm truncate max-w-[120px] sm:max-w-[200px]">' + userDisplay + '</span>' +
+                                '<div class="flex items-center gap-1 flex-wrap">' +
                                     '<span class="badge ' + statusClass + '">' + statusText + '</span>' +
                                     '<span class="badge ' + onlineClass + '">' + onlineText + '</span>' +
                                 '</div>' +
-                                '<div class="flex gap-1 flex-wrap">' +
-                                    '<button onclick="copyConfig(\\'' + encodeURIComponent(user.username) + '\\')" title="Copy VLESS config" class="action-btn text-zinc-400 hover:text-indigo-400 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>' +
-                                    '<button onclick="copyJsonConfig(\\'' + encodeURIComponent(user.username) + '\\')" title="Copy JSON config" class="action-btn text-zinc-400 hover:text-purple-400 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg></button>' +
-                                    '<button onclick="showQR(\\'' + encodeURIComponent(user.username) + '\\')" title="Show QR code" class="action-btn text-zinc-400 hover:text-emerald-400 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg></button>' +
+                                '<div class="flex gap-0.5 sm:gap-1 flex-wrap user-actions-wrap">' +
+                                    '<button onclick="copyConfig(\\'' + encodeURIComponent(user.username) + '\\')" title="Copy VLESS" class="action-btn text-zinc-400 hover:text-indigo-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>' +
+                                    '<button onclick="copyJsonConfig(\\'' + encodeURIComponent(user.username) + '\\')" title="Copy JSON" class="action-btn text-zinc-400 hover:text-purple-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg></button>' +
+                                    '<button onclick="showQR(\\'' + encodeURIComponent(user.username) + '\\')" title="QR" class="action-btn text-zinc-400 hover:text-emerald-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg></button>' +
                                     '<button onclick="toggleUserStatus(\\'' + encodeURIComponent(user.username) + '\\')" title="' + statusBtnTitle + '" class="action-btn ' + statusBtnColor + ' transition">' + statusBtnIcon + '</button>' +
-                                    '<button onclick="editUser(\\'' + encodeURIComponent(user.username) + '\\')" title="Edit user" class="action-btn text-zinc-400 hover:text-yellow-400 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>' +
-                                    '<button onclick="deleteUser(\\'' + encodeURIComponent(user.username) + '\\')" title="Delete user" class="action-btn text-zinc-400 hover:text-red-400 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>' +
+                                    '<button onclick="editUser(\\'' + encodeURIComponent(user.username) + '\\')" title="Edit" class="action-btn text-zinc-400 hover:text-yellow-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>' +
+                                    '<button onclick="deleteUser(\\'' + encodeURIComponent(user.username) + '\\')" title="Delete" class="action-btn text-zinc-400 hover:text-red-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>' +
                                 '</div>' +
                             '</div>' +
                         '</td>' +
-                        '<td class="p-3">' +
-                            '<div class="flex flex-col gap-1">' +
-                                '<div class="flex gap-1">' +
-                                    '<button onclick="copySubLink(\\'' + encodeURIComponent(user.username) + '\\')" class="flex-1 px-2 py-1 text-xs font-medium rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition">Text Sub</button>' +
-                                    '<button onclick="copyJsonSubLink(\\'' + encodeURIComponent(user.username) + '\\')" class="flex-1 px-2 py-1 text-xs font-medium rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition">JSON Sub</button>' +
+                        '<td class="p-2 sm:p-3">' +
+                            '<div class="flex flex-col gap-1 subscription-buttons">' +
+                                '<div class="flex gap-0.5 sm:gap-1">' +
+                                    '<button onclick="copySubLink(\\'' + encodeURIComponent(user.username) + '\\')" class="flex-1 px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition">Text</button>' +
+                                    '<button onclick="copyJsonSubLink(\\'' + encodeURIComponent(user.username) + '\\')" class="flex-1 px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition">JSON</button>' +
                                 '</div>' +
-                                '<button onclick="copyStatusLink(\\'' + encodeURIComponent(user.username) + '\\')" class="px-2 py-1 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition">Status Page</button>' +
+                                '<button onclick="copyStatusLink(\\'' + encodeURIComponent(user.username) + '\\')" class="px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition">Status</button>' +
                             '</div>' +
                         '</td>' +
-                        '<td class="p-3 text-xs font-mono uppercase text-indigo-400 font-semibold">VLESS</td>' +
-                        '<td class="p-3 text-xs">' + 
-                            '<div class="flex flex-wrap gap-1 max-w-[160px]">' +
+                        '<td class="p-2 sm:p-3 text-[10px] sm:text-xs font-mono uppercase text-indigo-400 font-semibold hidden sm:table-cell">VLESS</td>' +
+                        '<td class="p-2 sm:p-3 text-[10px] sm:text-xs hidden md:table-cell">' + 
+                            '<div class="flex flex-wrap gap-0.5 sm:gap-1 max-w-[120px]">' +
                                 String(user.port || "").split(",").map(function(p) {
                                     p = p.trim();
                                     if (!p) return "";
@@ -3447,9 +3575,9 @@ var HTML_TEMPLATES = {
                                 }).join("") +
                             '</div>' +
                         '</td>' +
-                        '<td class="p-3">' + volumeHtml + '</td>' +
-                        '<td class="p-3">' + expiryHtml + '</td>' +
-                        '<td class="p-3 text-xs text-zinc-400">' + createdDate + '</td>' +
+                        '<td class="p-2 sm:p-3 hidden lg:table-cell">' + volumeHtml + '</td>' +
+                        '<td class="p-2 sm:p-3 hidden xl:table-cell">' + expiryHtml + '</td>' +
+                        '<td class="p-2 sm:p-3 text-[10px] sm:text-xs text-zinc-400 hidden 2xl:table-cell">' + createdDate + '</td>' +
                     '</tr>';
                 }).join('');
             }
@@ -3460,27 +3588,27 @@ var HTML_TEMPLATES = {
         // ============================================
         async function handleFormSubmit(event) {
             event.preventDefault();
-            const submitButton = document.getElementById('submit-btn');
+            var submitButton = document.getElementById('submit-btn');
             submitButton.disabled = true;
             submitButton.innerText = isEditMode ? 'Saving...' : 'Creating...';
-            const username = document.getElementById('input-name').value.trim();
-            const limit = document.getElementById('input-limit').value || null;
-            const expiry = document.getElementById('input-expiry').value || null;
-            const checkedPorts = Array.from(document.querySelectorAll('input[name="ports"]:checked')).map(cb => cb.value);
+            var username = document.getElementById('input-name').value.trim();
+            var limit = document.getElementById('input-limit').value || null;
+            var expiry = document.getElementById('input-expiry').value || null;
+            var checkedPorts = Array.from(document.querySelectorAll('input[name="ports"]:checked')).map(function(cb) { return cb.value; });
             if (checkedPorts.length === 0) {
                 alert('❌ Please select at least one port!');
                 submitButton.disabled = false;
-                submitButton.innerText = isEditMode ? 'Save Changes' : 'Create User';
+                submitButton.innerText = isEditMode ? 'Save' : 'Create';
                 return;
             }
-            const port = checkedPorts.join(',');
-            const tls = checkedPorts.some(p => tlsPorts.includes(p)) ? 'on' : 'off';
-            const ips = document.getElementById('input-ips').value;
-            const fingerprint = document.getElementById('fingerprint-select').value;
-            const url = isEditMode ? '/api/users/' + encodeURIComponent(editingUsername) : '/api/users';
-            const method = isEditMode ? 'PUT' : 'POST';
+            var port = checkedPorts.join(',');
+            var tls = checkedPorts.some(function(p) { return tlsPorts.includes(p); }) ? 'on' : 'off';
+            var ips = document.getElementById('input-ips').value;
+            var fingerprint = document.getElementById('fingerprint-select').value;
+            var url = isEditMode ? '/api/users/' + encodeURIComponent(editingUsername) : '/api/users';
+            var method = isEditMode ? 'PUT' : 'POST';
             try {
-                const response = await fetch(url, {
+                var response = await fetch(url, {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, limit_gb: limit, expiry_days: expiry, tls, port, ips, fingerprint })
@@ -3489,14 +3617,14 @@ var HTML_TEMPLATES = {
                     toggleModal(false);
                     await loadUsers(true);
                 } else {
-                    const errData = await response.json();
+                    var errData = await response.json();
                     alert('❌ Error: ' + (errData.error || 'Operation failed'));
                 }
             } catch (err) {
                 alert('❌ Connection error');
             } finally {
                 submitButton.disabled = false;
-                submitButton.innerText = isEditMode ? 'Save Changes' : 'Create User';
+                submitButton.innerText = isEditMode ? 'Save' : 'Create';
             }
         }
 
@@ -3508,11 +3636,11 @@ var HTML_TEMPLATES = {
             loadUsers();
             loadLocations();
             loadAdminsList();
-            setInterval(() => loadUsers(true), 30000);
+            setInterval(function() { loadUsers(true); }, 30000);
             setInterval(updateXrayStatus, 10000);
             showPage('dashboard');
-            setTimeout(() => {
-                const cb443 = document.querySelector('input[name="ports"][value="443"]');
+            setTimeout(function() {
+                var cb443 = document.querySelector('input[name="ports"][value="443"]');
                 if (cb443) cb443.checked = true;
             }, 200);
         });
