@@ -2,12 +2,17 @@
   <img src="https://img.shields.io/badge/Version-2.9.4-blue?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Protocol-VLESS%2BWS-purple?style=for-the-badge" alt="Protocol">
   <img src="https://img.shields.io/badge/Platform-Cloudflare%20Workers-orange?style=for-the-badge" alt="Platform">
+  <img src="https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge" alt="Status">
 </p>
 
 <div align="center">
+  <img src="https://raw.githubusercontent.com/Void0Latency/panel/main/assets/logo.png" width="150" alt="VoidLatency Logo">
   <h1>🚀 VoidLatency Panel</h1>
   <p><strong>Next-Gen VPN Management Panel</strong></p>
   <p>Modern • Fast • Secure</p>
+  
+  [![GitHub stars](https://img.shields.io/github/stars/Void0Latency/panel?style=social)](https://github.com/Void0Latency/panel/stargazers)
+  [![GitHub forks](https://img.shields.io/github/forks/Void0Latency/panel?style=social)](https://github.com/Void0Latency/panel/network/members)
 </div>
 
 ---
@@ -37,8 +42,10 @@
 git clone https://github.com/Void0Latency/panel.git
 cd panel
 
-# Deploy
+# Install dependencies
 npm install
+
+# Deploy to Cloudflare
 npm run deploy
 📋 Requirements
 Cloudflare Account (Free)
@@ -63,19 +70,40 @@ GET	/feed/json/{username}	JSON subscription
 GET	/status/{username}	User status page
 🛠️ Development
 bash
-# Install
+# Install dependencies
 npm install
 
 # Run locally
 npm run dev
 
-# Deploy
+# Deploy to Cloudflare
 npm run deploy
-🙏 Support
-<div align="center">
-https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white
-https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white
-https://img.shields.io/badge/Cloudflare-F38020?style=for-the-badge&logo=cloudflare&logoColor=white
+📁 Project Structure
+text
+panel/
+├── voidlatency-core.js    # Main panel code
+├── schema.sql             # Database schema
+├── wrangler.toml          # Cloudflare config
+├── package.json           # Dependencies
+├── deploy.sh              # Auto deploy script
+└── README.md              # Documentation
+🤝 Contributing
+Fork the repository
 
-</div>
-<p align="center"> Made with ❤️ by <a href="https://github.com/Void0Latency">Void0Latency</a> <br> ⚡ Powered by Cloudflare Workers </p> ```
+Create your feature branch (git checkout -b feature/amazing)
+
+Commit your changes (git commit -m 'Add amazing feature')
+
+Push to the branch (git push origin feature/amazing)
+
+Open a Pull Request
+
+📄 License
+MIT License - see the LICENSE file for details.
+
+🙏 Support & Community
+<div align="center"> <a href="https://github.com/Void0Latency"> <img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"> </a> <a href="#"> <img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram"> </a> <a href="#"> <img src="https://img.shields.io/badge/Cloudflare-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare"> </a> <a href="#"> <img src="https://img.shields.io/badge/Twitter-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white" alt="Twitter"> </a> </div>
+⭐ Star History
+https://api.star-history.com/svg?repos=Void0Latency/panel&type=Date
+
+<p align="center"> Made with ❤️ by <a href="https://github.com/Void0Latency">Void0Latency</a><br> ⚡ Powered by Cloudflare Workers </p> ```
