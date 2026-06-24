@@ -17,6 +17,22 @@
 
 ---
 
+## 📦 Table of Contents
+
+- [✨ Features](#-features)
+- [🚀 One-Click Deploy](#-one-click-deploy)
+- [📋 Requirements](#-requirements)
+- [📱 Subscription Links](#-subscription-links)
+- [🔧 API Endpoints](#-api-endpoints)
+- [🛠️ Development](#️-development)
+- [📁 Project Structure](#-project-structure)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
+- [🙏 Support & Community](#-support--community)
+- [⭐ Star History](#-star-history)
+
+---
+
 ## ✨ Features
 
 | Feature | Description |
@@ -37,7 +53,7 @@
 
 ### Manual Deploy
 
-```bash
+
 # Clone
 git clone https://github.com/Void0Latency/panel.git
 cd panel
@@ -47,6 +63,8 @@ npm install
 
 # Deploy to Cloudflare
 npm run deploy
+
+
 📋 Requirements
 Cloudflare Account (Free)
 
@@ -55,10 +73,14 @@ GitHub Account (Free)
 Node.js 18+
 
 📱 Subscription Links
+
+
 Type	Format
 Text	https://your-panel.workers.dev/feed/username
 JSON	https://your-panel.workers.dev/feed/json/username
 Status	https://your-panel.workers.dev/status/username
+
+
 🔧 API Endpoints
 Method	Endpoint	Description
 GET	/api/users	List all users
@@ -68,6 +90,8 @@ DELETE	/api/users/{username}	Delete user
 GET	/feed/{username}	Text subscription
 GET	/feed/json/{username}	JSON subscription
 GET	/status/{username}	User status page
+
+
 🛠️ Development
 bash
 # Install dependencies
@@ -78,6 +102,8 @@ npm run dev
 
 # Deploy to Cloudflare
 npm run deploy
+
+
 📁 Project Structure
 text
 panel/
@@ -87,6 +113,8 @@ panel/
 ├── package.json           # Dependencies
 ├── deploy.sh              # Auto deploy script
 └── README.md              # Documentation
+
+
 🤝 Contributing
 Fork the repository
 
@@ -98,12 +126,16 @@ Push to the branch (git push origin feature/amazing)
 
 Open a Pull Request
 
+
 📄 License
 MIT License - see the LICENSE file for details.
 
+
 🙏 Support & Community
 <div align="center"> <a href="https://github.com/Void0Latency"> <img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"> </a> <a href="#"> <img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram"> </a> <a href="#"> <img src="https://img.shields.io/badge/Cloudflare-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare"> </a> <a href="#"> <img src="https://img.shields.io/badge/Twitter-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white" alt="Twitter"> </a> </div>
+
+
 ⭐ Star History
 https://api.star-history.com/svg?repos=Void0Latency/panel&type=Date
 
-<p align="center"> Made with ❤️ by <a href="https://github.com/Void0Latency">Void0Latency</a><br> ⚡ Powered by Cloudflare Workers </p> ```
+<p align="center"> Made with ❤️ by <a href="https://github.com/Void0Latency">Void0Latency</a><br> ⚡ Powered by Cloudflare Workers </p>
