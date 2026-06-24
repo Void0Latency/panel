@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// voidlatency-core.js - Complete 3x-UI Style Panel with Full Responsive
+// voidlatency-core.js - Complete Panel with All Features
 import { connect } from "cloudflare:sockets";
 
 // ============================================
@@ -172,7 +172,8 @@ var Router = {
         tls: user.tls,
         port: user.port,
         ips: user.ips,
-        fingerprint: user.fingerprint || "chrome"
+        fingerprint: user.fingerprint || "chrome",
+        config_name: user.config_name || user.username + " | " + user.port + " | @VoidLatency"
       });
       const html = HTML_TEMPLATES.status.replace(
         "/* {{USER_DATA_PLACEHOLDER}} */",
@@ -188,6 +189,9 @@ var Router = {
   async handleApi(request, url, env, ctx) {
     const hasPassword = await DbService.getPanelPassword(env.VL_DB);
     
+    // ============================================
+    // SETUP PASSWORD
+    // ============================================
     if (url.pathname === "/api/setup-password" && request.method === "POST") {
       if (hasPassword) {
         return new Response(JSON.stringify({ error: "Password already set" }), {
@@ -212,6 +216,9 @@ var Router = {
       });
     }
     
+    // ============================================
+    // LOGIN
+    // ============================================
     if (url.pathname === "/api/login" && request.method === "POST") {
       const { password } = await request.json();
       const hashedInput = await DbService.sha256(password);
@@ -230,6 +237,9 @@ var Router = {
       });
     }
     
+    // ============================================
+    // LOGOUT
+    // ============================================
     if (url.pathname === "/api/logout" && request.method === "POST") {
       return new Response(JSON.stringify({ success: true }), {
         headers: {
@@ -239,6 +249,9 @@ var Router = {
       });
     }
     
+    // ============================================
+    // AUTH VERIFICATION
+    // ============================================
     const authorized = await DbService.verifyApiAuth(request, env);
     if (!authorized) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -247,6 +260,9 @@ var Router = {
       });
     }
     
+    // ============================================
+    // CHANGE PASSWORD
+    // ============================================
     if (url.pathname === "/api/change-password" && request.method === "POST") {
       const { current_password, new_password } = await request.json();
       if (!current_password || !new_password) {
@@ -279,6 +295,9 @@ var Router = {
       });
     }
     
+    // ============================================
+    // XRAY CONTROL
+    // ============================================
     if (url.pathname === "/api/xray" && request.method === "POST") {
       const { action } = await request.json();
       if (action === "stop") {
@@ -307,6 +326,9 @@ var Router = {
       }));
     }
     
+    // ============================================
+    // LOCATIONS
+    // ============================================
     if (url.pathname === "/locations") {
       try {
         const response = await fetch("https://speed.cloudflare.com/locations", {
@@ -321,6 +343,9 @@ var Router = {
       }
     }
     
+    // ============================================
+    // SYSTEM STATS
+    // ============================================
     if (url.pathname === "/api/system/stats") {
       return new Response(JSON.stringify({
         cpu: SYSTEM_STATS.cpu,
@@ -328,12 +353,16 @@ var Router = {
         swap: SYSTEM_STATS.swap,
         storage: SYSTEM_STATS.storage,
         uptime: "26d 3h",
-        xray_uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000)
+        xray_uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000),
+        version: "2.9.4"
       }), {
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
       });
     }
     
+    // ============================================
+    // PROXY IP SETTINGS
+    // ============================================
     if (url.pathname === "/api/proxy-ip") {
       if (request.method === "POST") {
         const { proxy_ip, iata, frag_len, frag_int } = await request.json();
@@ -357,6 +386,9 @@ var Router = {
       }
     }
     
+    // ============================================
+    // ADMINS
+    // ============================================
     if (url.pathname === "/api/admins") {
       await loadAdmins(env);
       if (request.method === "GET") {
@@ -384,6 +416,9 @@ var Router = {
       }
     }
     
+    // ============================================
+    // USERS
+    // ============================================
     if (url.pathname.startsWith("/api/users")) {
       const pathParts = url.pathname.split("/");
       const isUserAction = pathParts.length > 3;
@@ -397,9 +432,9 @@ var Router = {
             ).bind(username).run();
             return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
           } else {
-            const { limit_gb, expiry_days, ips, tls, port, fingerprint } = body;
+            const { limit_gb, expiry_days, ips, tls, port, fingerprint, config_name } = body;
             await env.VL_DB.prepare(
-              "UPDATE users SET limit_gb = ?, expiry_days = ?, ips = ?, tls = ?, port = ?, fingerprint = ? WHERE username = ?"
+              "UPDATE users SET limit_gb = ?, expiry_days = ?, ips = ?, tls = ?, port = ?, fingerprint = ?, config_name = ? WHERE username = ?"
             ).bind(
               limit_gb ? parseFloat(limit_gb) : null,
               expiry_days ? parseInt(expiry_days) : null,
@@ -407,6 +442,7 @@ var Router = {
               tls,
               port,
               fingerprint || "chrome",
+              config_name || username + " | " + port + " | @VoidLatency",
               username
             ).run();
             return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
@@ -426,7 +462,8 @@ var Router = {
           const enrichedUsers = (results || []).map((user) => ({
             ...user,
             is_online: user.last_active && now - user.last_active < 65e3 ? 1 : 0,
-            used_gb: user.used_gb || 0
+            used_gb: user.used_gb || 0,
+            config_name: user.config_name || user.username + " | " + user.port + " | @VoidLatency"
           }));
           return new Response(JSON.stringify({ users: enrichedUsers, serverTime: now }), {
             headers: {
@@ -436,14 +473,14 @@ var Router = {
           });
         }
         if (request.method === "POST") {
-          const { username, limit_gb, expiry_days, ips, tls, port, fingerprint } = await request.json();
+          const { username, limit_gb, expiry_days, ips, tls, port, fingerprint, config_name } = await request.json();
           if (!username) {
             return new Response(JSON.stringify({ error: "Username is required" }), { status: 400, headers: { "Content-Type": "application/json" } });
           }
           const uuid = crypto.randomUUID();
           try {
             await env.VL_DB.prepare(
-              "INSERT INTO users (username, uuid, limit_gb, expiry_days, ips, connection_type, tls, port, fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+              "INSERT INTO users (username, uuid, limit_gb, expiry_days, ips, connection_type, tls, port, fingerprint, config_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             ).bind(
               username,
               uuid,
@@ -453,7 +490,8 @@ var Router = {
               atob("dmxlc3M="),
               tls,
               port,
-              fingerprint || "chrome"
+              fingerprint || "chrome",
+              config_name || username + " | " + port + " | @VoidLatency"
             ).run();
             return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
           } catch (err) {
@@ -465,6 +503,45 @@ var Router = {
           }
         }
       }
+    }
+    
+    // ============================================
+    // UPDATE CHECK
+    // ============================================
+    if (url.pathname === "/api/update-check") {
+      try {
+        const response = await fetch("https://api.github.com/repos/Void0Latency/panel/releases/latest");
+        if (!response.ok) throw new Error("Failed to fetch");
+        const data = await response.json();
+        return new Response(JSON.stringify({
+          current_version: "2.9.4",
+          latest_version: data.tag_name || data.name,
+          update_available: data.tag_name !== "v2.9.4" && data.tag_name !== "2.9.4",
+          url: data.html_url,
+          body: data.body
+        }), {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "Could not check for updates" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+    }
+    
+    // ============================================
+    // SYSTEM INFO
+    // ============================================
+    if (url.pathname === "/api/system/info") {
+      return new Response(JSON.stringify({
+        version: "2.9.4",
+        platform: "Cloudflare Workers",
+        environment: "Production",
+        uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000)
+      }), {
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+      });
     }
     
     return new Response(JSON.stringify({ error: "Not Found" }), { status: 404 });
@@ -494,7 +571,9 @@ var DbService = {
           used_gb REAL DEFAULT 0,
           is_active INTEGER DEFAULT 1,
           last_active INTEGER,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          fingerprint TEXT DEFAULT 'chrome',
+          config_name TEXT
         )
       `).run();
     } catch (e) {}
@@ -506,6 +585,9 @@ var DbService = {
     } catch (e) {}
     try {
       await db.prepare("ALTER TABLE users ADD COLUMN fingerprint TEXT DEFAULT 'chrome'").run();
+    } catch (e) {}
+    try {
+      await db.prepare("ALTER TABLE users ADD COLUMN config_name TEXT").run();
     } catch (e) {}
     try {
       await db.prepare("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)").run();
@@ -554,7 +636,7 @@ var DbService = {
 };
 
 // ============================================
-// SUBSCRIPTION SERVICE (Enhanced - 2 configs with info, rest with format)
+// SUBSCRIPTION SERVICE (Enhanced)
 // ============================================
 var SubscriptionService = {
   async generateJson(user, host, env) {
@@ -588,14 +670,11 @@ var SubscriptionService = {
         const isTlsPort = ["443", "2053", "2083", "2087", "2096", "8443"].includes(portStr);
         const tlsVal = isTlsPort ? "tls" : "none";
         
-        // First 2 configs have info (expiry and traffic)
         if (portIndex < 2) {
-          // Config 1: Expiry info
           const remark1 = "⏳ INFO | " + user.username.toUpperCase() + " STATUS | 📅 Exp: " + expiryDate.toISOString().split('T')[0].replace(/-/g, '/') + " | 🔥 " + daysLeft + " Days Left | " + (daysLeft > 0 ? "🟢 ACTIVE" : "🔴 EXPIRED");
           const configObj1 = this.buildConfig(user, ip, portStr, tlsVal, host, fp, fragLen, fragInt, remark1);
           configArray.push(configObj1);
           
-          // Config 2: Traffic info
           const usedFormatted = usedGB >= 1 ? usedGB.toFixed(1) + "GB" : (usedGB * 1024).toFixed(0) + "MB";
           const leftFormatted = leftGB >= 1 ? leftGB.toFixed(1) + "GB" : (leftGB * 1024).toFixed(0) + "MB";
           const totalFormatted = totalGB >= 1 ? totalGB + "GB" : "Unlimited";
@@ -603,9 +682,8 @@ var SubscriptionService = {
           const configObj2 = this.buildConfig(user, ip, portStr, tlsVal, host, fp, fragLen, fragInt, remark2);
           configArray.push(configObj2);
         } else {
-          // Rest use format: username | port | @VoidLatency | 🏁
-          const remark = user.username + " | " + portStr + " | @VoidLatency | 🏁";
-          const configObj = this.buildConfig(user, ip, portStr, tlsVal, host, fp, fragLen, fragInt, remark);
+          const configName = user.config_name || user.username + " | " + portStr + " | @VoidLatency";
+          const configObj = this.buildConfig(user, ip, portStr, tlsVal, host, fp, fragLen, fragInt, configName);
           configArray.push(configObj);
         }
       });
@@ -734,22 +812,18 @@ var SubscriptionService = {
         const isTlsPort = ["443", "2053", "2083", "2087", "2096", "8443"].includes(portStr);
         const tlsVal = isTlsPort ? "tls" : "none";
         
-        // First 2 configs have info
         if (portIndex < 2) {
-          // Config 1: Expiry info
           const remark1 = "⏳ INFO | " + user.username.toUpperCase() + " STATUS | 📅 Exp: " + expiryDateStr + " | 🔥 " + daysLeft + " Days Left | " + (daysLeft > 0 ? "🟢 ACTIVE" : "🔴 EXPIRED");
           links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + ip + ":" + portStr + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark1));
           
-          // Config 2: Traffic info
           const usedFormatted = usedGB >= 1 ? usedGB.toFixed(1) + "GB" : (usedGB * 1024).toFixed(0) + "MB";
           const leftFormatted = leftGB >= 1 ? leftGB.toFixed(1) + "GB" : (leftGB * 1024).toFixed(0) + "MB";
           const totalFormatted = totalGB >= 1 ? totalGB + "GB" : "Unlimited";
           const remark2 = "📊 INFO | " + user.username.toUpperCase() + " TRAFFIC | 💾 " + totalFormatted + " Total | ⚡ " + usedFormatted + " Used | 🎯 " + leftFormatted + " Left";
           links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + ip + ":" + portStr + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark2));
         } else {
-          // Rest use format
-          const remark = user.username + " | " + portStr + " | @VoidLatency | 🏁";
-          links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + ip + ":" + portStr + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark));
+          const configName = user.config_name || user.username + " | " + portStr + " | @VoidLatency";
+          links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + ip + ":" + portStr + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(configName));
         }
       });
     });
@@ -797,10 +871,9 @@ async function flushExpiredTraffic(env) {
     }
   }
 }
-__name(flushExpiredTraffic, "flushExpiredTraffic");
 
 // ============================================
-// VLESS HANDLER (Unchanged)
+// VLESS HANDLER
 // ============================================
 async function handleVLESS(env, storedData = null, ctx = null) {
   const socketPair = new WebSocketPair();
@@ -823,14 +896,14 @@ async function handleVLESS(env, storedData = null, ctx = null) {
       const deltaGb = bytesToCommit / (1024 * 1024 * 1024);
       const leftover = current - bytesToCommit;
       GLOBAL_TRAFFIC_CACHE.set(username, leftover);
-      const writeTask = /* @__PURE__ */ __name(async () => {
+      const writeTask = async () => {
         try {
           await env.VL_DB.prepare("UPDATE users SET used_gb = used_gb + ? WHERE username = ?").bind(deltaGb, username).run();
         } catch (e) {
           let recovered = GLOBAL_TRAFFIC_CACHE.get(username) || 0;
           GLOBAL_TRAFFIC_CACHE.set(username, recovered + bytesToCommit);
         }
-      }, "writeTask");
+      };
       if (ctx) {
         ctx.waitUntil(writeTask());
       } else {
@@ -840,10 +913,9 @@ async function handleVLESS(env, storedData = null, ctx = null) {
       GLOBAL_TRAFFIC_CACHE.set(username, current);
     }
   }
-  __name(addBytes, "addBytes");
   
   let isOfflineSet = false;
-  const setOffline = /* @__PURE__ */ __name(() => {
+  const setOffline = () => {
     if (isOfflineSet) return;
     isOfflineSet = true;
     const uname = username;
@@ -856,14 +928,14 @@ async function handleVLESS(env, storedData = null, ctx = null) {
       if (cachedBytes > 0) {
         GLOBAL_TRAFFIC_CACHE.set(uname, 0);
         const deltaGb = cachedBytes / (1024 * 1024 * 1024);
-        const writeTask = /* @__PURE__ */ __name(async () => {
+        const writeTask = async () => {
           try {
             await env.VL_DB.prepare("UPDATE users SET used_gb = used_gb + ? WHERE username = ?").bind(deltaGb, uname).run();
           } catch (e) {
             let recovered = GLOBAL_TRAFFIC_CACHE.get(uname) || 0;
             GLOBAL_TRAFFIC_CACHE.set(uname, recovered + cachedBytes);
           }
-        }, "writeTask");
+        };
         if (ctx) {
           ctx.waitUntil(writeTask());
         } else {
@@ -873,7 +945,7 @@ async function handleVLESS(env, storedData = null, ctx = null) {
     } else {
       ACTIVE_CONNECTIONS_COUNT.set(uname, activeCount);
     }
-  }, "setOffline");
+  };
   
   const heartbeat = setInterval(async () => {
     if (serverSock.readyState === WebSocket.OPEN) {
@@ -929,7 +1001,7 @@ async function handleVLESS(env, storedData = null, ctx = null) {
   let wsQueueBytes = 0, wsQueueItems = 0;
   let currentSocketWriter = null, activeRemoteWriter = null;
   
-  const releaseRemoteWriter = /* @__PURE__ */ __name(() => {
+  const releaseRemoteWriter = () => {
     if (activeRemoteWriter) {
       try {
         activeRemoteWriter.releaseLock();
@@ -937,9 +1009,9 @@ async function handleVLESS(env, storedData = null, ctx = null) {
       activeRemoteWriter = null;
     }
     currentSocketWriter = null;
-  }, "releaseRemoteWriter");
+  };
   
-  const getRemoteWriter = /* @__PURE__ */ __name(() => {
+  const getRemoteWriter = () => {
     const s = remoteConnWrapper.socket;
     if (!s) return null;
     if (s !== currentSocketWriter) {
@@ -948,30 +1020,30 @@ async function handleVLESS(env, storedData = null, ctx = null) {
       activeRemoteWriter = s.writable.getWriter();
     }
     return activeRemoteWriter;
-  }, "getRemoteWriter");
+  };
   
   const upstreamQueue = createUpstreamQueue({
     getWriter: getRemoteWriter,
     releaseWriter: releaseRemoteWriter,
-    retryConnect: /* @__PURE__ */ __name(async () => {
+    retryConnect: async () => {
       if (typeof remoteConnWrapper.retryConnect === "function") {
         await remoteConnWrapper.retryConnect();
       }
-    }, "retryConnect"),
-    closeConnection: /* @__PURE__ */ __name(() => {
+    },
+    closeConnection: () => {
       try {
         remoteConnWrapper.socket?.close();
       } catch (e) {}
       closeSocketQuietly(serverSock);
-    }, "closeConnection"),
+    },
     name: "VlessWSQueue"
   });
   
-  const writeToRemote = /* @__PURE__ */ __name(async (chunk, allowRetry = true) => {
+  const writeToRemote = async (chunk, allowRetry = true) => {
     return upstreamQueue.writeAndAwait(chunk, allowRetry);
-  }, "writeToRemote");
+  };
   
-  const processWsMessage = /* @__PURE__ */ __name(async (chunk) => {
+  const processWsMessage = async (chunk) => {
     const bytes = chunk.byteLength || 0;
     await addBytes(bytes);
     if (isDnsQuery) {
@@ -1016,13 +1088,13 @@ async function handleVLESS(env, storedData = null, ctx = null) {
       let activeCount = ACTIVE_CONNECTIONS_COUNT.get(username) || 0;
       ACTIVE_CONNECTIONS_COUNT.set(username, activeCount + 1);
       if (activeCount === 0) {
-        const setOnlineTask = /* @__PURE__ */ __name(async () => {
+        const setOnlineTask = async () => {
           try {
             const now = Date.now();
             GLOBAL_LAST_ACTIVE_WRITE.set(username, now);
             await env.VL_DB.prepare("UPDATE users SET last_active = ? WHERE username = ?").bind(now, username).run();
           } catch (e) {}
-        }, "setOnlineTask");
+        };
         if (ctx) ctx.waitUntil(setOnlineTask());
         else setOnlineTask();
       }
@@ -1055,7 +1127,7 @@ async function handleVLESS(env, storedData = null, ctx = null) {
           }
           return;
         }
-        const connectTCP = /* @__PURE__ */ __name(async (dataPayload = null, useFallback = true) => {
+        const connectTCP = async (dataPayload = null, useFallback = true) => {
           if (remoteConnWrapper.connectingPromise) {
             await remoteConnWrapper.connectingPromise;
             return;
@@ -1085,16 +1157,16 @@ async function handleVLESS(env, storedData = null, ctx = null) {
               remoteConnWrapper.connectingPromise = null;
             }
           }
-        }, "connectTCP");
+        };
         remoteConnWrapper.retryConnect = async () => connectTCP(null, false);
         await connectTCP(rawData, true);
       } catch (e) {
         serverSock.close();
       }
     }
-  }, "processWsMessage");
+  };
   
-  const handleWsError = /* @__PURE__ */ __name((err) => {
+  const handleWsError = (err) => {
     if (wsFailed) return;
     wsFailed = true;
     wsStopped = true;
@@ -1104,11 +1176,11 @@ async function handleVLESS(env, storedData = null, ctx = null) {
     releaseRemoteWriter();
     closeSocketQuietly(serverSock);
     setOffline();
-  }, "handleWsError");
+  };
   
-  const pushToChain = /* @__PURE__ */ __name((task) => {
+  const pushToChain = (task) => {
     wsChain = wsChain.then(task).catch(handleWsError);
-  }, "pushToChain");
+  };
   
   serverSock.addEventListener("message", (event) => {
     if (wsStopped || wsFailed) return;
@@ -1149,22 +1221,19 @@ async function handleVLESS(env, storedData = null, ctx = null) {
   
   return new Response(null, { status: 101, webSocket: clientSock });
 }
-__name(handleVLESS, "handleVLESS");
 
 // ============================================
-// NETWORK UTILITIES (Unchanged)
+// NETWORK UTILITIES
 // ============================================
 function isIPv4(value) {
   const parts = String(value || "").split(".");
   return parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255);
 }
-__name(isIPv4, "isIPv4");
 
 function stripIPv6Brackets(hostname = "") {
   const host = String(hostname || "").trim();
   return host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
 }
-__name(stripIPv6Brackets, "stripIPv6Brackets");
 
 function isIPHostname(hostname = "") {
   const host = stripIPv6Brackets(hostname);
@@ -1177,7 +1246,6 @@ function isIPHostname(hostname = "") {
     return false;
   }
 }
-__name(isIPHostname, "isIPHostname");
 
 function convertToUint8Array(data) {
   if (data instanceof Uint8Array) return data;
@@ -1185,7 +1253,6 @@ function convertToUint8Array(data) {
   if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   return new Uint8Array(data || 0);
 }
-__name(convertToUint8Array, "convertToUint8Array");
 
 function concatBytes(...chunkList) {
   const chunks = chunkList.map(convertToUint8Array);
@@ -1198,7 +1265,6 @@ function concatBytes(...chunkList) {
   }
   return result;
 }
-__name(concatBytes, "concatBytes");
 
 function closeSocketQuietly(socket) {
   try {
@@ -1207,10 +1273,9 @@ function closeSocketQuietly(socket) {
     }
   } catch (e) {}
 }
-__name(closeSocketQuietly, "closeSocketQuietly");
 
 // ============================================
-// DNS UTILITIES (Unchanged)
+// DNS UTILITIES
 // ============================================
 async function dohQuery(domain, recordType) {
   const cacheKey = domain + ":" + recordType;
@@ -1222,7 +1287,7 @@ async function dohQuery(domain, recordType) {
   try {
     const typeMap = { "A": 1, "AAAA": 28 };
     const qtype = typeMap[recordType.toUpperCase()] || 1;
-    const encodeDomain = /* @__PURE__ */ __name((name) => {
+    const encodeDomain = (name) => {
       const parts = name.endsWith(".") ? name.slice(0, -1).split(".") : name.split(".");
       const bufs = [];
       for (const label of parts) {
@@ -1231,7 +1296,7 @@ async function dohQuery(domain, recordType) {
       }
       bufs.push(new Uint8Array([0]));
       return concatBytes(...bufs);
-    }, "encodeDomain");
+    };
     const qname = encodeDomain(domain);
     const query = new Uint8Array(12 + qname.length + 4);
     const qview = new DataView(query.buffer);
@@ -1254,7 +1319,7 @@ async function dohQuery(domain, recordType) {
     const dv = new DataView(buf.buffer);
     const qdcount = dv.getUint16(4);
     const ancount = dv.getUint16(6);
-    const parseName = /* @__PURE__ */ __name((pos) => {
+    const parseName = (pos) => {
       const labels = [];
       let p = pos, jumped = false, endPos = -1, safe = 128;
       while (p < buf.length && safe-- > 0) {
@@ -1274,7 +1339,7 @@ async function dohQuery(domain, recordType) {
       }
       if (endPos === -1) endPos = p + 1;
       return [labels.join("."), endPos];
-    }, "parseName");
+    };
     let offset = 12;
     for (let i = 0; i < qdcount; i++) {
       const [, end] = parseName(offset);
@@ -1311,10 +1376,9 @@ async function dohQuery(domain, recordType) {
     return [];
   }
 }
-__name(dohQuery, "dohQuery");
 
 // ============================================
-// UPSTREAM QUEUE (Unchanged)
+// UPSTREAM QUEUE
 // ============================================
 function createUpstreamQueue({ getWriter, releaseWriter, retryConnect, closeConnection, name = "UpstreamQueue" }) {
   let chunks = [];
@@ -1326,7 +1390,7 @@ function createUpstreamQueue({ getWriter, releaseWriter, retryConnect, closeConn
   let idleResolvers = [];
   let activeCompletions = null;
   
-  const settleCompletions = /* @__PURE__ */ __name((completions, err = null) => {
+  const settleCompletions = (completions, err = null) => {
     if (!completions) return;
     for (const comp of completions) {
       if (comp) {
@@ -1334,30 +1398,30 @@ function createUpstreamQueue({ getWriter, releaseWriter, retryConnect, closeConn
         else comp.resolve();
       }
     }
-  }, "settleCompletions");
+  };
   
-  const rejectQueued = /* @__PURE__ */ __name((err) => {
+  const rejectQueued = (err) => {
     for (let i = head; i < chunks.length; i++) {
       const item = chunks[i];
       if (item && item.completions) settleCompletions(item.completions, err);
     }
-  }, "rejectQueued");
+  };
   
-  const compact = /* @__PURE__ */ __name(() => {
+  const compact = () => {
     if (head > 32 && head * 2 >= chunks.length) {
       chunks = chunks.slice(head);
       head = 0;
     }
-  }, "compact");
+  };
   
-  const resolveIdle = /* @__PURE__ */ __name(() => {
+  const resolveIdle = () => {
     if (queuedBytes || draining || !idleResolvers.length) return;
     const resolvers = idleResolvers;
     idleResolvers = [];
     for (const resolve of resolvers) resolve();
-  }, "resolveIdle");
+  };
   
-  const clear = /* @__PURE__ */ __name((err = null) => {
+  const clear = (err = null) => {
     const closeErr = err || (closed ? new Error(name + ": queue closed") : null);
     if (closeErr) {
       rejectQueued(closeErr);
@@ -1368,18 +1432,18 @@ function createUpstreamQueue({ getWriter, releaseWriter, retryConnect, closeConn
     head = 0;
     queuedBytes = 0;
     resolveIdle();
-  }, "clear");
+  };
   
-  const shift = /* @__PURE__ */ __name(() => {
+  const shift = () => {
     if (head >= chunks.length) return null;
     const item = chunks[head];
     chunks[head++] = void 0;
     queuedBytes -= item.chunk.byteLength;
     compact();
     return item;
-  }, "shift");
+  };
   
-  const bundle = /* @__PURE__ */ __name(() => {
+  const bundle = () => {
     const first = shift();
     if (!first) return null;
     if (head >= chunks.length || first.chunk.byteLength >= UPSTREAM_BUNDLE_TARGET_BYTES) return first;
@@ -1409,9 +1473,9 @@ function createUpstreamQueue({ getWriter, releaseWriter, retryConnect, closeConn
     }
     compact();
     return { chunk: output.subarray(0, byteLength), allowRetry, completions };
-  }, "bundle");
+  };
   
-  const drain = /* @__PURE__ */ __name(async () => {
+  const drain = async () => {
     if (draining || closed) return;
     draining = true;
     try {
@@ -1453,9 +1517,9 @@ function createUpstreamQueue({ getWriter, releaseWriter, retryConnect, closeConn
       if (!closed && head < chunks.length) queueMicrotask(drain);
       else resolveIdle();
     }
-  }, "drain");
+  };
   
-  const enqueue = /* @__PURE__ */ __name((data, allowRetry = true, waitForFlush = false) => {
+  const enqueue = (data, allowRetry = true, waitForFlush = false) => {
     if (closed) return false;
     if (!getWriter()) return false;
     const chunk = convertToUint8Array(data);
@@ -1481,7 +1545,7 @@ function createUpstreamQueue({ getWriter, releaseWriter, retryConnect, closeConn
     queuedBytes = nextBytes;
     if (!draining) queueMicrotask(drain);
     return waitForFlush ? completionPromise.then(() => true) : true;
-  }, "enqueue");
+  };
   
   return {
     writeAndAwait(data, allowRetry = true) {
@@ -1497,10 +1561,9 @@ function createUpstreamQueue({ getWriter, releaseWriter, retryConnect, closeConn
     }
   };
 }
-__name(createUpstreamQueue, "createUpstreamQueue");
 
 // ============================================
-// DOWNSTREAM SENDER (Unchanged)
+// DOWNSTREAM SENDER
 // ============================================
 function createDownstreamSender(webSocket, headerData = null) {
   const packetCap = DOWNSTREAM_GRAIN_BYTES;
@@ -1516,21 +1579,21 @@ function createDownstreamSender(webSocket, headerData = null) {
   let waitRounds = 0;
   let flushPromise = null;
   
-  const sendRawChunk = /* @__PURE__ */ __name(async (chunk) => {
+  const sendRawChunk = async (chunk) => {
     if (webSocket.readyState !== WebSocket.OPEN) throw new Error("ws.readyState is not open");
     webSocket.send(chunk);
-  }, "sendRawChunk");
+  };
   
-  const attachResponseHeader = /* @__PURE__ */ __name((chunk) => {
+  const attachResponseHeader = (chunk) => {
     if (!header) return chunk;
     const merged = new Uint8Array(header.length + chunk.byteLength);
     merged.set(header, 0);
     merged.set(chunk, header.length);
     header = null;
     return merged;
-  }, "attachResponseHeader");
+  };
   
-  const flush = /* @__PURE__ */ __name(async () => {
+  const flush = async () => {
     while (flushPromise) await flushPromise;
     if (flushTimer) clearTimeout(flushTimer);
     flushTimer = null;
@@ -1544,9 +1607,9 @@ function createDownstreamSender(webSocket, headerData = null) {
       flushPromise = null;
     });
     return flushPromise;
-  }, "flush");
+  };
   
-  const scheduleFlush = /* @__PURE__ */ __name(() => {
+  const scheduleFlush = () => {
     if (flushTimer || microtaskQueued) return;
     microtaskQueued = true;
     scheduledGeneration = generation;
@@ -1573,7 +1636,7 @@ function createDownstreamSender(webSocket, headerData = null) {
         flush().catch(() => closeSocketQuietly(webSocket));
       }, Math.max(DOWNSTREAM_GRAIN_SILENT_MS, 1));
     });
-  }, "scheduleFlush");
+  };
   
   return {
     async sendDirect(data) {
@@ -1608,7 +1671,6 @@ function createDownstreamSender(webSocket, headerData = null) {
     flush
   };
 }
-__name(createDownstreamSender, "createDownstreamSender");
 
 async function waitForBackpressure(ws) {
   if (typeof ws.bufferedAmount === "number") {
@@ -1617,7 +1679,6 @@ async function waitForBackpressure(ws) {
     }
   }
 }
-__name(waitForBackpressure, "waitForBackpressure");
 
 async function connectStreams(remoteSocket, webSocket, headerData, retryFunc, onBytes) {
   let header = headerData, hasData = false, reader, useBYOB = false;
@@ -1673,7 +1734,6 @@ async function connectStreams(remoteSocket, webSocket, headerData, retryFunc, on
   }
   if (!hasData && retryFunc) await retryFunc();
 }
-__name(connectStreams, "connectStreams");
 
 async function buildRaceCandidates(address, port) {
   if (!PRELOAD_RACE_DIAL || isIPHostname(address)) return null;
@@ -1692,19 +1752,18 @@ async function buildRaceCandidates(address, port) {
   if (ipList.length === 0) return null;
   return ipList.map((hostname, attempt) => ({ hostname, port, attempt, resolvedFrom: address }));
 }
-__name(buildRaceCandidates, "buildRaceCandidates");
 
 async function connectDirect(address, port, initialData = null) {
   const raceCandidates = await buildRaceCandidates(address, port);
   const candidates = raceCandidates || Array.from({ length: TCP_CONCURRENCY }, () => ({ hostname: address, port }));
-  const openConnection = /* @__PURE__ */ __name(async (host, prt) => {
+  const openConnection = async (host, prt) => {
     const socket = connect({ hostname: host, port: prt });
     await Promise.race([
       socket.opened,
       new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 1e3))
     ]);
     return socket;
-  }, "openConnection");
+  };
   if (candidates.length === 1) {
     const s = await openConnection(candidates[0].hostname, candidates[0].port);
     if (initialData && initialData.byteLength > 0) {
@@ -1738,7 +1797,6 @@ async function connectDirect(address, port, initialData = null) {
     }
   }
 }
-__name(connectDirect, "connectDirect");
 
 async function forwardVlessUDP(udpChunk, webSocket, respHeader) {
   const requestData = convertToUint8Array(udpChunk);
@@ -1765,17 +1823,15 @@ async function forwardVlessUDP(udpChunk, webSocket, respHeader) {
     }));
   } catch (e) {}
 }
-__name(forwardVlessUDP, "forwardVlessUDP");
 
 function extractUUIDFromVless(data) {
   if (data.byteLength < 17) return null;
   const hex = [...data.slice(1, 17)].map((b) => b.toString(16).padStart(2, "0")).join("");
   return hex.substring(0, 8) + "-" + hex.substring(8, 12) + "-" + hex.substring(12, 16) + "-" + hex.substring(16, 20) + "-" + hex.substring(20);
 }
-__name(extractUUIDFromVless, "extractUUIDFromVless");
 
 // ============================================
-// HTML TEMPLATES - Complete 3x-UI Style Panel with Full Responsive
+// HTML TEMPLATES - Complete Panel
 // ============================================
 var HTML_TEMPLATES = {
   nginx: `<!DOCTYPE html>
@@ -3025,7 +3081,7 @@ var HTML_TEMPLATES = {
                 ports.forEach(function(portStr) {
                     var isTlsPort = tlsPorts.includes(portStr);
                     var tlsVal = isTlsPort ? 'tls' : 'none';
-                    var remark = user.username + ' | ' + portStr + ' | @VoidLatency | 🏁';
+                    var remark = user.config_name || user.username + " | " + portStr + " | @VoidLatency";
                     var jsonConfig = {
                         "remarks": remark,
                         "version": { "min": "25.10.15" },
@@ -3605,13 +3661,14 @@ var HTML_TEMPLATES = {
             var tls = checkedPorts.some(function(p) { return tlsPorts.includes(p); }) ? 'on' : 'off';
             var ips = document.getElementById('input-ips').value;
             var fingerprint = document.getElementById('fingerprint-select').value;
+            var config_name = document.getElementById('config-name-input') ? document.getElementById('config-name-input').value : '';
             var url = isEditMode ? '/api/users/' + encodeURIComponent(editingUsername) : '/api/users';
             var method = isEditMode ? 'PUT' : 'POST';
             try {
                 var response = await fetch(url, {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, limit_gb: limit, expiry_days: expiry, tls, port, ips, fingerprint })
+                    body: JSON.stringify({ username, limit_gb: limit, expiry_days: expiry, tls, port, ips, fingerprint, config_name })
                 });
                 if (response.ok) {
                     toggleModal(false);
