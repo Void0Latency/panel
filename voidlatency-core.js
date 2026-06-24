@@ -29,6 +29,8 @@ var SYSTEM_STATS = {
   storage: { used: 818.93, total: 2867.20 }
 };
 var ADMINS = [];
+var PANEL_VERSION = "2.9.4";
+var THEME = "dark";
 
 // ============================================
 // MAIN APPLICATION
@@ -347,16 +349,46 @@ var Router = {
     // SYSTEM STATS
     // ============================================
     if (url.pathname === "/api/system/stats") {
+      const now = Date.now();
+      const uptime = xrayStatus.running ? Math.floor((now - xrayStatus.startTime) / 1000) : 0;
       return new Response(JSON.stringify({
         cpu: SYSTEM_STATS.cpu,
         ram: SYSTEM_STATS.ram,
         swap: SYSTEM_STATS.swap,
         storage: SYSTEM_STATS.storage,
         uptime: "26d 3h",
-        xray_uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000),
-        version: "2.9.4"
+        xray_uptime: uptime,
+        version: PANEL_VERSION,
+        theme: THEME
       }), {
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+      });
+    }
+    
+    // ============================================
+    // THEME SETTINGS
+    // ============================================
+    if (url.pathname === "/api/theme" && request.method === "POST") {
+      const { theme } = await request.json();
+      if (theme === "dark" || theme === "light") {
+        THEME = theme;
+        await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('theme', ?)").bind(theme).run();
+        return new Response(JSON.stringify({ success: true, theme: THEME }), {
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({ error: "Invalid theme" }), { status: 400 });
+    }
+    
+    if (url.pathname === "/api/theme" && request.method === "GET") {
+      try {
+        const row = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'theme'").first();
+        if (row && row.value) {
+          THEME = row.value;
+        }
+      } catch (e) {}
+      return new Response(JSON.stringify({ theme: THEME }), {
+        headers: { "Content-Type": "application/json" }
       });
     }
     
@@ -513,17 +545,24 @@ var Router = {
         const response = await fetch("https://api.github.com/repos/Void0Latency/panel/releases/latest");
         if (!response.ok) throw new Error("Failed to fetch");
         const data = await response.json();
+        const latestVersion = data.tag_name || data.name || "v2.9.4";
+        const currentVersion = "v" + PANEL_VERSION;
         return new Response(JSON.stringify({
-          current_version: "2.9.4",
-          latest_version: data.tag_name || data.name,
-          update_available: data.tag_name !== "v2.9.4" && data.tag_name !== "2.9.4",
+          current_version: currentVersion,
+          latest_version: latestVersion,
+          update_available: latestVersion !== currentVersion && latestVersion !== PANEL_VERSION,
           url: data.html_url,
-          body: data.body
+          body: data.body,
+          published_at: data.published_at
         }), {
           headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
         });
       } catch (e) {
-        return new Response(JSON.stringify({ error: "Could not check for updates" }), {
+        return new Response(JSON.stringify({ 
+          error: "Could not check for updates",
+          current_version: "v" + PANEL_VERSION,
+          update_available: false
+        }), {
           status: 500,
           headers: { "Content-Type": "application/json" }
         });
@@ -535,10 +574,18 @@ var Router = {
     // ============================================
     if (url.pathname === "/api/system/info") {
       return new Response(JSON.stringify({
-        version: "2.9.4",
+        version: PANEL_VERSION,
         platform: "Cloudflare Workers",
         environment: "Production",
-        uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000)
+        uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000),
+        theme: THEME,
+        xray: {
+          running: xrayStatus.running,
+          uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000),
+          version: "v26.4.25",
+          memory: "50.98 MB",
+          threads: 14
+        }
       }), {
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
       });
@@ -636,7 +683,7 @@ var DbService = {
 };
 
 // ============================================
-// SUBSCRIPTION SERVICE (Enhanced)
+// SUBSCRIPTION SERVICE
 // ============================================
 var SubscriptionService = {
   async generateJson(user, host, env) {
@@ -1831,7 +1878,7 @@ function extractUUIDFromVless(data) {
 }
 
 // ============================================
-// HTML TEMPLATES - Complete Panel
+// HTML TEMPLATES - COMPLETE
 // ============================================
 var HTML_TEMPLATES = {
   nginx: `<!DOCTYPE html>
@@ -1909,7 +1956,7 @@ var HTML_TEMPLATES = {
         </div>
     </div>
 </body>
-</html>`,
+</html>`
 
   setup: `<!DOCTYPE html>
 <html lang="en" class="dark">
@@ -2086,7 +2133,6 @@ var HTML_TEMPLATES = {
         .glass-light { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); }
         .glow { box-shadow: 0 0 60px rgba(99, 102, 241, 0.1); }
         
-        /* Sidebar Styles */
         .sidebar { background: #0d0d18; border-right: 1px solid rgba(255,255,255,0.04); }
         .sidebar-link { transition: all 0.2s; border-radius: 12px; padding: 10px 16px; }
         .sidebar-link:hover { background: rgba(255,255,255,0.05); color: white; }
@@ -2119,10 +2165,7 @@ var HTML_TEMPLATES = {
         .page-section.active { display: block; }
         .port-checkbox:checked + .port-label-tls { border-color: #34d399; background: rgba(52, 211, 153, 0.1); color: #34d399; }
         .port-checkbox:checked + .port-label-nontls { border-color: #fbbf24; background: rgba(251, 191, 36, 0.1); color: #fbbf24; }
-        .show-ports-btn { cursor: pointer; transition: all 0.2s; }
-        .show-ports-btn:hover { color: #818cf8; }
 
-        /* Mobile Responsive Fixes */
         @media (max-width: 1023px) {
             .sidebar {
                 position: fixed !important;
@@ -2137,11 +2180,7 @@ var HTML_TEMPLATES = {
                 overflow-y: auto !important;
                 display: block !important;
             }
-            
-            .sidebar.active {
-                left: 0 !important;
-            }
-            
+            .sidebar.active { left: 0 !important; }
             .sidebar-overlay {
                 display: none !important;
                 position: fixed !important;
@@ -2152,118 +2191,39 @@ var HTML_TEMPLATES = {
                 background: rgba(0,0,0,0.6) !important;
                 z-index: 999 !important;
             }
-            
-            .sidebar-overlay.active {
-                display: block !important;
-            }
-            
-            .lg\\:ml-64 {
-                margin-left: 0 !important;
-            }
-            
-            .main-content {
-                width: 100% !important;
-                overflow-x: hidden !important;
-            }
-            
-            .system-stat {
-                padding: 12px !important;
-            }
-            
-            .system-stat p.text-lg {
-                font-size: 16px !important;
-            }
-            
-            .stat-card {
-                padding: 16px !important;
-            }
-            
-            .stat-card p.text-3xl {
-                font-size: 24px !important;
-            }
-            
-            .users-table-wrap {
-                overflow-x: auto !important;
-                -webkit-overflow-scrolling: touch !important;
-            }
-            
-            .users-table-wrap table {
-                min-width: 700px !important;
-            }
-            
-            .user-actions-wrap {
-                flex-wrap: wrap !important;
-            }
-            
-            .user-actions-wrap .action-btn {
-                padding: 4px !important;
-            }
-            
-            .subscription-buttons {
-                flex-direction: column !important;
-                gap: 4px !important;
-            }
-            
-            .subscription-buttons button {
-                width: 100% !important;
-                font-size: 10px !important;
-                padding: 4px 8px !important;
-            }
+            .sidebar-overlay.active { display: block !important; }
+            .lg\\:ml-64 { margin-left: 0 !important; }
+            .main-content { width: 100% !important; overflow-x: hidden !important; }
+            .system-stat { padding: 12px !important; }
+            .system-stat p.text-lg { font-size: 16px !important; }
+            .stat-card { padding: 16px !important; }
+            .stat-card p.text-3xl { font-size: 24px !important; }
+            .users-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+            .users-table-wrap table { min-width: 700px !important; }
+            .user-actions-wrap { flex-wrap: wrap !important; }
+            .user-actions-wrap .action-btn { padding: 4px !important; }
+            .subscription-buttons { flex-direction: column !important; gap: 4px !important; }
+            .subscription-buttons button { width: 100% !important; font-size: 10px !important; padding: 4px 8px !important; }
         }
 
         @media (max-width: 640px) {
-            .glass-modal {
-                padding: 20px 16px !important;
-            }
-            
-            .modal-card {
-                max-width: 100% !important;
-                margin: 10px !important;
-            }
-            
-            .modal-card form .grid {
-                grid-template-columns: 1fr !important;
-            }
-            
-            .stats-grid {
-                grid-template-columns: 1fr 1fr !important;
-                gap: 8px !important;
-            }
-            
-            .stats-grid .stat-card {
-                padding: 12px !important;
-            }
-            
-            .stats-grid .stat-card p.text-3xl {
-                font-size: 20px !important;
-            }
-            
-            .stats-grid .stat-card .w-12 {
-                width: 36px !important;
-                height: 36px !important;
-            }
-            
-            .stats-grid .stat-card .w-12 svg {
-                width: 18px !important;
-                height: 18px !important;
-            }
-            
-            header h1 {
-                font-size: 16px !important;
-            }
-            
-            header .text-xs {
-                font-size: 10px !important;
-            }
+            .glass-modal { padding: 20px 16px !important; }
+            .modal-card { max-width: 100% !important; margin: 10px !important; }
+            .modal-card form .grid { grid-template-columns: 1fr !important; }
+            .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+            .stats-grid .stat-card { padding: 12px !important; }
+            .stats-grid .stat-card p.text-3xl { font-size: 20px !important; }
+            .stats-grid .stat-card .w-12 { width: 36px !important; height: 36px !important; }
+            .stats-grid .stat-card .w-12 svg { width: 18px !important; height: 18px !important; }
+            header h1 { font-size: 16px !important; }
+            header .text-xs { font-size: 10px !important; }
         }
     </style>
 </head>
 <body>
 
-    <!-- Sidebar Overlay for Mobile -->
     <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
-    <!-- Sidebar -->
     <div class="fixed inset-y-0 left-0 w-64 sidebar z-50">
         <div class="p-6">
             <div class="flex items-center gap-3 mb-10">
@@ -2333,9 +2293,7 @@ var HTML_TEMPLATES = {
         </div>
     </div>
 
-    <!-- Main Content -->
     <div class="lg:ml-64 min-h-screen main-content">
-        <!-- Header -->
         <header class="bg-[#0a0a0f]/80 backdrop-blur-xl border-b border-zinc-800/30 px-4 sm:px-6 py-3 sm:py-4 sticky top-0 z-40">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3 sm:gap-4">
@@ -2356,15 +2314,18 @@ var HTML_TEMPLATES = {
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                         <span class="hidden xs:inline">Xray Running</span>
                     </span>
+                    <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-white/5 text-zinc-400 transition">
+                        <svg id="theme-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
         </header>
 
-        <!-- Content -->
         <main class="p-3 sm:p-6">
             <!-- Dashboard Page -->
             <div id="page-dashboard" class="page-section active">
-                <!-- System Stats -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6 stats-grid">
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
@@ -2412,7 +2373,6 @@ var HTML_TEMPLATES = {
                     </div>
                 </div>
 
-                <!-- Xray Controls -->
                 <div class="glass rounded-2xl p-4 sm:p-5 mb-4 sm:mb-6">
                     <div class="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
                         <div class="flex items-center gap-3 sm:gap-4 flex-wrap">
@@ -2438,7 +2398,6 @@ var HTML_TEMPLATES = {
                     </div>
                 </div>
 
-                <!-- Stats Grid -->
                 <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-8 stats-grid">
                     <div class="glass rounded-2xl p-4 sm:p-6 stat-card">
                         <div class="flex items-center justify-between">
@@ -2516,7 +2475,6 @@ var HTML_TEMPLATES = {
                         </button>
                     </div>
 
-                    <!-- Filters -->
                     <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4 sm:mb-6">
                         <div class="flex-1 relative">
                             <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2552,7 +2510,7 @@ var HTML_TEMPLATES = {
                                 <thead>
                                     <tr class="border-b border-zinc-800/50 text-[10px] sm:text-xs text-zinc-400 uppercase tracking-wider">
                                         <th class="p-2 sm:p-3 font-medium">User</th>
-                                        <th class="p-2 sm:p-3 font-medium">Sub</th>
+                                        <th class="p-2 sm:p-3 font-medium">Subscription</th>
                                         <th class="p-2 sm:p-3 font-medium hidden sm:table-cell">Protocol</th>
                                         <th class="p-2 sm:p-3 font-medium hidden md:table-cell">Ports</th>
                                         <th class="p-2 sm:p-3 font-medium hidden lg:table-cell">Usage</th>
@@ -2605,6 +2563,11 @@ var HTML_TEMPLATES = {
                                 <button type="button" onclick="changeAdminPassword()" id="change-pwd-btn" class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm">Update Password</button>
                             </div>
                         </div>
+                        <div class="pt-4 border-t border-zinc-800/30">
+                            <h4 class="text-sm font-semibold text-white mb-3">Update Panel</h4>
+                            <div id="update-info" class="text-xs text-zinc-400 mb-2">Checking for updates...</div>
+                            <button onclick="checkUpdate()" class="w-full py-3 bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-emerald-500/25">Check for Updates</button>
+                        </div>
                         <div class="flex gap-3 pt-2 border-t border-zinc-800/30">
                             <button type="button" onclick="saveSettings()" id="save-settings-btn" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-indigo-500/25">Save</button>
                         </div>
@@ -2643,12 +2606,10 @@ var HTML_TEMPLATES = {
                     </div>
                 </div>
             </div>
-
         </main>
     </div>
 
     <!-- Modals -->
-    <!-- Add/Edit User Modal -->
     <div id="user-modal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 modal-overlay opacity-0 pointer-events-none transition-opacity duration-300">
         <div id="user-modal-card" class="w-full max-w-2xl glass rounded-3xl p-4 sm:p-6 transition-all duration-300 opacity-0 scale-95 modal-card scrollbar-thin">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
@@ -2715,6 +2676,11 @@ var HTML_TEMPLATES = {
                     </select>
                 </div>
 
+                <div>
+                    <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Config Name</label>
+                    <input type="text" id="config-name-input" placeholder="Custom config name..." class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
+                </div>
+
                 <div class="flex gap-3 pt-3 sm:pt-4 border-t border-zinc-800/30">
                     <button type="button" onclick="toggleModal(false)" class="flex-1 py-3 bg-white/5 hover:bg-white/10 text-zinc-400 font-semibold rounded-xl transition text-sm">Cancel</button>
                     <button type="submit" id="submit-btn" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-indigo-500/25">Create</button>
@@ -2723,7 +2689,6 @@ var HTML_TEMPLATES = {
         </div>
     </div>
 
-    <!-- QR Modal -->
     <div id="qr-modal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 modal-overlay opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="glass rounded-3xl p-4 sm:p-6 max-w-sm w-full transition-all duration-300 opacity-0 scale-95 text-center">
             <h3 id="qr-modal-title" class="text-lg font-bold text-white mb-4">QR Code</h3>
@@ -2746,6 +2711,7 @@ var HTML_TEMPLATES = {
         let editingUsername = '';
         let allUsers = [];
         let lastServerTime = Date.now();
+        let currentTheme = 'dark';
 
         // ============================================
         // PAGE NAVIGATION
@@ -2765,34 +2731,23 @@ var HTML_TEMPLATES = {
             };
             document.getElementById('page-title').innerText = titles[page][0];
             document.getElementById('page-subtitle').innerText = titles[page][1];
-            
-            // Close sidebar on mobile
-            if (window.innerWidth < 1024) {
-                toggleSidebar();
-            }
+            if (window.innerWidth < 1024) { toggleSidebar(); }
         }
 
         // ============================================
-        // SIDEBAR TOGGLE FOR MOBILE - FIXED
+        // SIDEBAR TOGGLE
         // ============================================
         function toggleSidebar() {
             var sidebar = document.querySelector('.sidebar');
             var overlay = document.getElementById('sidebar-overlay');
-            
-            if (sidebar) {
-                sidebar.classList.toggle('active');
-            }
-            if (overlay) {
-                overlay.classList.toggle('active');
-            }
+            if (sidebar) { sidebar.classList.toggle('active'); }
+            if (overlay) { overlay.classList.toggle('active'); }
         }
 
-        // Close sidebar when clicking outside
         document.addEventListener('click', function(event) {
             var sidebar = document.querySelector('.sidebar');
             var toggleBtn = document.querySelector('.lg\\:hidden.p-2');
             var overlay = document.getElementById('sidebar-overlay');
-            
             if (window.innerWidth < 1024 && sidebar && toggleBtn && overlay) {
                 if (!sidebar.contains(event.target) && !toggleBtn.contains(event.target)) {
                     sidebar.classList.remove('active');
@@ -2800,6 +2755,81 @@ var HTML_TEMPLATES = {
                 }
             }
         });
+
+        // ============================================
+        // THEME TOGGLE
+        // ============================================
+        async function toggleTheme() {
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            try {
+                const res = await fetch('/api/theme', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme: newTheme })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    currentTheme = data.theme;
+                    applyTheme(currentTheme);
+                }
+            } catch (e) {
+                currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                applyTheme(currentTheme);
+            }
+        }
+
+        function applyTheme(theme) {
+            const html = document.documentElement;
+            const icon = document.getElementById('theme-icon');
+            if (theme === 'light') {
+                html.classList.remove('dark');
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z"/>';
+                document.body.style.background = '#f1f5f9';
+                document.body.style.color = '#0f172a';
+            } else {
+                html.classList.add('dark');
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>';
+                document.body.style.background = '#0a0a0f';
+                document.body.style.color = '#e5e7eb';
+            }
+            localStorage.setItem('theme', theme);
+        }
+
+        async function loadTheme() {
+            try {
+                const res = await fetch('/api/theme');
+                const data = await res.json();
+                currentTheme = data.theme || 'dark';
+                applyTheme(currentTheme);
+            } catch (e) {
+                const saved = localStorage.getItem('theme') || 'dark';
+                currentTheme = saved;
+                applyTheme(saved);
+            }
+        }
+
+        // ============================================
+        // UPDATE CHECK
+        // ============================================
+        async function checkUpdate() {
+            const info = document.getElementById('update-info');
+            info.innerText = 'Checking for updates...';
+            info.style.color = '#60a5fa';
+            try {
+                const res = await fetch('/api/update-check');
+                const data = await res.json();
+                if (data.update_available) {
+                    info.innerHTML = '✅ New version <strong>' + data.latest_version + '</strong> available! <a href="' + data.url + '" target="_blank" class="text-emerald-400 hover:underline">View release</a>';
+                    info.style.color = '#34d399';
+                } else {
+                    info.innerHTML = '✅ You are running the latest version <strong>' + data.current_version + '</strong>';
+                    info.style.color = '#34d399';
+                }
+            } catch (e) {
+                info.innerText = '❌ Could not check for updates';
+                info.style.color = '#ef4444';
+            }
+        }
 
         // ============================================
         // PORT CHECKBOXES
@@ -3005,7 +3035,7 @@ var HTML_TEMPLATES = {
         }
 
         // ============================================
-        // USER FUNCTIONS (Shortened for space)
+        // USER FUNCTIONS
         // ============================================
         function getVlessLink(username) {
             var user = allUsers.find(function(u) { return u.username === username; });
@@ -3058,12 +3088,14 @@ var HTML_TEMPLATES = {
             var username = decodeURIComponent(encodedUsername);
             navigator.clipboard.writeText(getStatusLink(username)).then(function() { alert('✅ Status page link copied!'); });
         }
+
         function copyConfig(encodedUsername) {
             var username = decodeURIComponent(encodedUsername);
             var link = getVlessLink(username);
             if (!link) return;
             navigator.clipboard.writeText(link).then(function() { alert('✅ VLESS config copied!'); });
         }
+
         function copyJsonConfig(encodedUsername) {
             var username = decodeURIComponent(encodedUsername);
             var user = allUsers.find(function(u) { return u.username === username; });
@@ -3193,6 +3225,7 @@ var HTML_TEMPLATES = {
             document.getElementById('input-expiry').value = user.expiry_days || '';
             document.getElementById('input-ips').value = user.ips || '';
             document.getElementById('fingerprint-select').value = user.fingerprint || 'chrome';
+            document.getElementById('config-name-input').value = user.config_name || '';
             var userPorts = String(user.port || '').split(',').map(function(p) { return p.trim(); });
             document.querySelectorAll('input[name="ports"]').forEach(function(cb) {
                 cb.checked = userPorts.includes(cb.value);
@@ -3593,10 +3626,11 @@ var HTML_TEMPLATES = {
                     var onlineClass = user.is_online === 1 ? 'badge-success' : 'badge';
                     var onlineText = user.is_online === 1 ? '● Online' : 'Offline';
                     var userDisplay = user.username + ' | ' + user.port + ' | @VoidLatency';
+                    var configName = user.config_name || user.username + ' | ' + user.port + ' | @VoidLatency';
                     return '<tr class="hover:bg-white/5 border-b border-zinc-800/30">' +
                         '<td class="p-2 sm:p-3">' +
                             '<div class="flex flex-col gap-1">' +
-                                '<span class="font-bold text-white text-xs sm:text-sm truncate max-w-[120px] sm:max-w-[200px]">' + userDisplay + '</span>' +
+                                '<span class="font-bold text-white text-xs sm:text-sm truncate max-w-[120px] sm:max-w-[200px]">' + configName + '</span>' +
                                 '<div class="flex items-center gap-1 flex-wrap">' +
                                     '<span class="badge ' + statusClass + '">' + statusText + '</span>' +
                                     '<span class="badge ' + onlineClass + '">' + onlineText + '</span>' +
@@ -3614,10 +3648,10 @@ var HTML_TEMPLATES = {
                         '<td class="p-2 sm:p-3">' +
                             '<div class="flex flex-col gap-1 subscription-buttons">' +
                                 '<div class="flex gap-0.5 sm:gap-1">' +
-                                    '<button onclick="copySubLink(\\'' + encodeURIComponent(user.username) + '\\')" class="flex-1 px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition">Text</button>' +
-                                    '<button onclick="copyJsonSubLink(\\'' + encodeURIComponent(user.username) + '\\')" class="flex-1 px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition">JSON</button>' +
+                                    '<button onclick="copySubLink(\\'' + encodeURIComponent(user.username) + '\\')" class="flex-1 px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition">📋 Text</button>' +
+                                    '<button onclick="copyJsonSubLink(\\'' + encodeURIComponent(user.username) + '\\')" class="flex-1 px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition">📄 JSON</button>' +
                                 '</div>' +
-                                '<button onclick="copyStatusLink(\\'' + encodeURIComponent(user.username) + '\\')" class="px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition">Status</button>' +
+                                '<button onclick="copyStatusLink(\\'' + encodeURIComponent(user.username) + '\\')" class="px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition">📊 Status</button>' +
                             '</div>' +
                         '</td>' +
                         '<td class="p-2 sm:p-3 text-[10px] sm:text-xs font-mono uppercase text-indigo-400 font-semibold hidden sm:table-cell">VLESS</td>' +
@@ -3661,7 +3695,7 @@ var HTML_TEMPLATES = {
             var tls = checkedPorts.some(function(p) { return tlsPorts.includes(p); }) ? 'on' : 'off';
             var ips = document.getElementById('input-ips').value;
             var fingerprint = document.getElementById('fingerprint-select').value;
-            var config_name = document.getElementById('config-name-input') ? document.getElementById('config-name-input').value : '';
+            var config_name = document.getElementById('config-name-input').value || '';
             var url = isEditMode ? '/api/users/' + encodeURIComponent(editingUsername) : '/api/users';
             var method = isEditMode ? 'PUT' : 'POST';
             try {
@@ -3693,9 +3727,12 @@ var HTML_TEMPLATES = {
             loadUsers();
             loadLocations();
             loadAdminsList();
+            loadTheme();
+            checkUpdate();
             setInterval(function() { loadUsers(true); }, 30000);
             setInterval(updateXrayStatus, 10000);
             showPage('dashboard');
+            document.getElementById('log-start-time').innerText = new Date().toLocaleString();
             setTimeout(function() {
                 var cb443 = document.querySelector('input[name="ports"][value="443"]');
                 if (cb443) cb443.checked = true;
