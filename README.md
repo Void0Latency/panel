@@ -64,7 +64,7 @@ npm install
 # Deploy to Cloudflare
 npm run deploy
 
-
+```bash
 📋 Requirements
 Cloudflare Account (Free)
 
@@ -138,4 +138,4 @@ MIT License - see the LICENSE file for details.
 ⭐ Star History
 https://api.star-history.com/svg?repos=Void0Latency/panel&type=Date
 
-<p align="center"> Made with ❤️ by <a href="https://github.com/Void0Latency">Void0Latency</a><br> ⚡ Powered by Cloudflare Workers </p>
+<p align="center"> Made with ❤️ by <a href="https://github.com/Void0Latency">Void0Latency</a><br> ⚡ Powered by Cloudflare Workers </p> ```
