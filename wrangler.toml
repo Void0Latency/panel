@@ -1,0 +1,21 @@
+name = "voidlatency-panel"
+main = "voidlatency-core.js"
+compatibility_date = "2024-12-18"
+
+[[d1_databases]]
+binding = "VL_DB"
+database_name = "voidlatency-db"
+database_id = ""
+
+[vars]
+NODE_VERSION = "18"
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[logging]
+enabled = true
