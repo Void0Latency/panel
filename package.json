@@ -1,0 +1,43 @@
+{
+  "name": "voidlatency-panel",
+  "version": "2.9.4",
+  "description": "🚀 VoidLatency VPN Management Panel",
+  "main": "voidlatency-core.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "d1:create": "wrangler d1 create voidlatency-db",
+    "d1:migrate": "wrangler d1 execute voidlatency-db --file=./schema.sql",
+    "d1:drop": "wrangler d1 delete voidlatency-db",
+    "d1:list": "wrangler d1 list",
+    "preview": "wrangler dev --remote",
+    "tail": "wrangler tail",
+    "logs": "wrangler tail --format=pretty",
+    "build": "echo 'No build step required'"
+  },
+  "keywords": [
+    "vpn",
+    "panel",
+    "vless",
+    "cloudflare",
+    "workers",
+    "d1"
+  ],
+  "author": "Void0Latency",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Void0Latency/panel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Void0Latency/panel/issues"
+  },
+  "homepage": "https://github.com/Void0Latency/panel#readme",
+  "dependencies": {},
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
