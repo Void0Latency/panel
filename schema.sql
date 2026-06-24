@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS users (
   used_gb REAL DEFAULT 0,
   is_active INTEGER DEFAULT 1,
   last_active INTEGER,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  fingerprint TEXT DEFAULT 'chrome',
+  config_name TEXT
 );
 
 -- Settings table
@@ -39,4 +41,5 @@ CREATE INDEX IF NOT EXISTS idx_users_online ON users(last_active);
 INSERT OR IGNORE INTO settings (key, value) VALUES 
   ('proxy_ip', 'proxyip.cmliussss.net'),
   ('frag_len', '20-30'),
-  ('frag_int', '1-2');
+  ('frag_int', '1-2'),
+  ('theme', 'dark');
