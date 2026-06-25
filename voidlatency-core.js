@@ -1716,9 +1716,6 @@ async function handleVLESS(env, storedData = null, ctx = null) {
     }
   }, 15e3);
   
-  // ... rest of handleVLESS function continues here
-  // [All the WebSocket handling, connection management, etc. remains the same]
-  
   let remoteConnWrapper = { socket: null, connectingPromise: null, retryConnect: null };
   let reqUUID = null;
   let isHeaderParsed = false;
@@ -2562,11 +2559,6 @@ function extractUUIDFromVless(data) {
 // ============================================
 // HTML TEMPLATES - COMPLETE
 // ============================================
-// [Full HTML templates are included here - same as previous version]
-// The HTML_TEMPLATES object with nginx, setup, login, panel, status
-// remains exactly as in the previous full version. All content, tags, 
-// classes, and everything is fully included.
-
 var HTML_TEMPLATES = {
   nginx: `<!DOCTYPE html>
 <html lang="en" class="dark">
@@ -3912,7 +3904,7 @@ var HTML_TEMPLATES = {
         }
 
         // ============================================
-        // USER FUNCTIONS
+        // USER FUNCTIONS - FIXED: Process ALL IPs
         // ============================================
         function getVlessLink(username) {
             var user = allUsers.find(function(u) { return u.username === username; });
@@ -3938,16 +3930,27 @@ var HTML_TEMPLATES = {
             var totalFormatted = totalGB >= 1 ? totalGB + 'GB' : 'Unlimited';
             var configName = user.config_name || user.username;
             var links = [];
-            ports.forEach(function(portStr) {
-                var isTlsPort = tlsPorts.includes(portStr);
-                var tlsVal = isTlsPort ? 'tls' : 'none';
-                var remark1 = '⏳ ' + user.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
-                links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ips[0] + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
-                var remark2 = '📊 ' + user.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
-                links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ips[0] + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
-                var remark3 = configName;
-                links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ips[0] + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark3));
+            
+            // پردازش تمام آیپی‌ها
+            ips.forEach(function(ip) {
+                ports.forEach(function(portStr) {
+                    var isTlsPort = tlsPorts.includes(portStr);
+                    var tlsVal = isTlsPort ? 'tls' : 'none';
+                    
+                    // کانفیگ 1: تاریخ انقضا
+                    var remark1 = '⏳ ' + user.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
+                    links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
+                    
+                    // کانفیگ 2: حجم مصرفی
+                    var remark2 = '📊 ' + user.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
+                    links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
+                    
+                    // کانفیگ 3: فقط اسم کاربر
+                    var remark3 = configName;
+                    links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark3));
+                });
             });
+            
             return links.join('\\n');
         }
 
@@ -3988,6 +3991,8 @@ var HTML_TEMPLATES = {
             var ports = String(user.port || '443').split(',').map(function(p) { return p.trim(); }).filter(function(p) { return p.length > 0; });
             var fp = user.fingerprint || 'chrome';
             var configArray = [];
+            
+            // پردازش تمام آیپی‌ها
             ips.forEach(function(ip) {
                 ports.forEach(function(portStr) {
                     var isTlsPort = tlsPorts.includes(portStr);
@@ -4787,18 +4792,21 @@ var HTML_TEMPLATES = {
             var configName = u.config_name || u.username;
             
             var links = [];
-            ports.forEach(function(portStr) {
-                var isTlsPort = ['443', '2053', '2083', '2087', '2096', '8443'].includes(portStr);
-                var tlsVal = isTlsPort ? 'tls' : 'none';
-                
-                var remark1 = '⏳ ' + u.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
-                links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ips[0] + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
-                
-                var remark2 = '📊 ' + u.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
-                links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ips[0] + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
-                
-                var remark3 = configName;
-                links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ips[0] + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark3));
+            // پردازش تمام آیپی‌ها
+            ips.forEach(function(ip) {
+                ports.forEach(function(portStr) {
+                    var isTlsPort = ['443', '2053', '2083', '2087', '2096', '8443'].includes(portStr);
+                    var tlsVal = isTlsPort ? 'tls' : 'none';
+                    
+                    var remark1 = '⏳ ' + u.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
+                    links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
+                    
+                    var remark2 = '📊 ' + u.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
+                    links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
+                    
+                    var remark3 = configName;
+                    links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark3));
+                });
             });
             return links.join('\\n');
         }
