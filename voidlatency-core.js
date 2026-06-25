@@ -2806,7 +2806,7 @@ var HTML_TEMPLATES = {
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>VoidLatency Panel</title>
     <script>
         const originalWarn = console.warn;
@@ -2856,19 +2856,105 @@ var HTML_TEMPLATES = {
         .page-section.active { display: block; }
         .port-checkbox:checked + .port-label-tls { border-color: #34d399; background: rgba(52, 211, 153, 0.1); color: #34d399; }
         .port-checkbox:checked + .port-label-nontls { border-color: #fbbf24; background: rgba(251, 191, 36, 0.1); color: #fbbf24; }
+
+        /* ============================================
+           MOBILE SIDEBAR STYLES
+           ============================================ */
         @media (max-width: 1023px) {
-            .sidebar { position: fixed; top: 0; left: -100%; width: 280px; height: 100vh; background: #0d0d18; border-right: 1px solid rgba(255,255,255,0.04); transition: left 0.3s ease; z-index: 1000; overflow-y: auto; display: block; }
-            .sidebar.active { left: 0; }
-            .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 999; }
-            .sidebar-overlay.active { display: block; }
-            .lg\\:ml-64 { margin-left: 0; }
-            .main-content { width: 100%; overflow-x: hidden; }
-            .system-stat { padding: 12px; }
-            .stat-card { padding: 16px; }
+            .sidebar {
+                position: fixed !important;
+                top: 0 !important;
+                left: -100% !important;
+                width: 280px !important;
+                height: 100vh !important;
+                background: #0d0d18 !important;
+                border-right: 1px solid rgba(255,255,255,0.04) !important;
+                transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                z-index: 1000 !important;
+                overflow-y: auto !important;
+                display: block !important;
+                padding-top: 0 !important;
+            }
+            
+            .sidebar.active { 
+                left: 0 !important; 
+            }
+            
+            .sidebar-overlay {
+                display: none !important;
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                background: rgba(0,0,0,0.6) !important;
+                z-index: 999 !important;
+                backdrop-filter: blur(4px) !important;
+                -webkit-backdrop-filter: blur(4px) !important;
+                transition: opacity 0.3s ease !important;
+            }
+            
+            .sidebar-overlay.active { 
+                display: block !important; 
+                opacity: 1 !important;
+            }
+            
+            .lg\\:ml-64 { 
+                margin-left: 0 !important; 
+            }
+            
+            .main-content { 
+                width: 100% !important; 
+                overflow-x: hidden !important;
+            }
+            
+            .sidebar::-webkit-scrollbar {
+                width: 3px;
+            }
+            .sidebar::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            .sidebar::-webkit-scrollbar-thumb {
+                background: rgba(99, 102, 241, 0.3);
+                border-radius: 10px;
+            }
+            
+            .sidebar .p-6 {
+                padding: 16px !important;
+            }
+            .sidebar-link {
+                padding: 8px 12px !important;
+                font-size: 13px !important;
+            }
+            .sidebar .absolute.bottom-6 {
+                position: relative !important;
+                bottom: auto !important;
+                left: auto !important;
+                right: auto !important;
+                margin-top: 20px !important;
+                padding-top: 16px !important;
+                border-top: 1px solid rgba(255,255,255,0.04) !important;
+            }
+            .system-stat { padding: 12px !important; }
+            .stat-card { padding: 16px !important; }
             .users-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
             .users-table-wrap table { min-width: 700px; }
         }
+
         @media (max-width: 640px) {
+            .sidebar {
+                width: 280px !important;
+            }
+            .sidebar .p-6 {
+                padding: 14px !important;
+            }
+            .sidebar-link {
+                padding: 6px 10px !important;
+                font-size: 12px !important;
+            }
+            .sidebar .text-lg {
+                font-size: 16px !important;
+            }
             .glass-modal { padding: 20px 16px; }
             .modal-card { max-width: 100%; margin: 10px; }
             .modal-card form .grid { grid-template-columns: 1fr; }
@@ -2882,8 +2968,12 @@ var HTML_TEMPLATES = {
 </head>
 <body>
 
+    <!-- Sidebar Overlay -->
     <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
+    <!-- ============================================
+    SIDEBAR
+    ============================================ -->
     <div class="fixed inset-y-0 left-0 w-64 sidebar z-50">
         <div class="p-6">
             <div class="flex items-center gap-3 mb-10">
@@ -2953,12 +3043,17 @@ var HTML_TEMPLATES = {
         </div>
     </div>
 
+    <!-- ============================================
+    MAIN CONTENT
+    ============================================ -->
     <div class="lg:ml-64 min-h-screen main-content">
+        
+        <!-- HEADER -->
         <header class="bg-[#0a0a0f]/80 backdrop-blur-xl border-b border-zinc-800/30 px-4 sm:px-6 py-3 sm:py-4 sticky top-0 z-40">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3 sm:gap-4">
                     <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-white/5 text-zinc-400">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg id="menu-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                         </svg>
                     </button>
@@ -2983,8 +3078,16 @@ var HTML_TEMPLATES = {
             </div>
         </header>
 
+        <!-- ============================================
+        MAIN CONTENT AREA
+        ============================================ -->
         <main class="p-3 sm:p-6">
+            
+            <!-- ==========================================
+            PAGE: DASHBOARD
+            ========================================== -->
             <div id="page-dashboard" class="page-section active">
+                <!-- System Stats -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6 stats-grid">
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
@@ -3032,6 +3135,7 @@ var HTML_TEMPLATES = {
                     </div>
                 </div>
 
+                <!-- Xray Controls -->
                 <div class="glass rounded-2xl p-4 sm:p-5 mb-4 sm:mb-6">
                     <div class="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
                         <div class="flex items-center gap-3 sm:gap-4 flex-wrap">
@@ -3057,6 +3161,7 @@ var HTML_TEMPLATES = {
                     </div>
                 </div>
 
+                <!-- Stats Grid -->
                 <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-8 stats-grid">
                     <div class="glass rounded-2xl p-4 sm:p-6 stat-card">
                         <div class="flex items-center justify-between">
@@ -3117,6 +3222,9 @@ var HTML_TEMPLATES = {
                 </div>
             </div>
 
+            <!-- ==========================================
+            PAGE: USERS
+            ========================================== -->
             <div id="page-users" class="page-section">
                 <div class="glass rounded-2xl p-4 sm:p-6">
                     <div class="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
@@ -3133,6 +3241,7 @@ var HTML_TEMPLATES = {
                         </button>
                     </div>
 
+                    <!-- Filters -->
                     <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4 sm:mb-6">
                         <div class="flex-1 relative">
                             <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3192,6 +3301,9 @@ var HTML_TEMPLATES = {
                 </div>
             </div>
 
+            <!-- ==========================================
+            PAGE: SETTINGS
+            ========================================== -->
             <div id="page-settings" class="page-section">
                 <div class="glass rounded-2xl p-4 sm:p-6 max-w-2xl">
                     <h2 class="text-lg font-bold text-white mb-4">Panel Settings</h2>
@@ -3243,6 +3355,9 @@ var HTML_TEMPLATES = {
                 </div>
             </div>
 
+            <!-- ==========================================
+            PAGE: LOGS
+            ========================================== -->
             <div id="page-logs" class="page-section">
                 <div class="glass rounded-2xl p-4 sm:p-6">
                     <h2 class="text-lg font-bold text-white mb-4">System Logs</h2>
@@ -3256,6 +3371,9 @@ var HTML_TEMPLATES = {
                 </div>
             </div>
 
+            <!-- ==========================================
+            PAGE: ADMINS
+            ========================================== -->
             <div id="page-admins" class="page-section">
                 <div class="glass rounded-2xl p-4 sm:p-6 max-w-md">
                     <h2 class="text-lg font-bold text-white mb-4">Admin Management</h2>
@@ -3272,10 +3390,15 @@ var HTML_TEMPLATES = {
                     </div>
                 </div>
             </div>
+
         </main>
     </div>
 
-    <!-- Modals -->
+    <!-- ============================================
+    MODALS
+    ============================================ -->
+
+    <!-- Add/Edit User Modal -->
     <div id="user-modal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 modal-overlay opacity-0 pointer-events-none transition-opacity duration-300">
         <div id="user-modal-card" class="w-full max-w-2xl glass rounded-3xl p-4 sm:p-6 transition-all duration-300 opacity-0 scale-95 modal-card scrollbar-thin">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
@@ -3355,6 +3478,7 @@ var HTML_TEMPLATES = {
         </div>
     </div>
 
+    <!-- QR Modal -->
     <div id="qr-modal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 modal-overlay opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="glass rounded-3xl p-4 sm:p-6 max-w-sm w-full transition-all duration-300 opacity-0 scale-95 text-center">
             <h3 id="qr-modal-title" class="text-lg font-bold text-white mb-4">QR Code</h3>
@@ -3365,6 +3489,9 @@ var HTML_TEMPLATES = {
         </div>
     </div>
 
+    <!-- ============================================
+    JAVASCRIPT
+    ============================================ -->
     <script>
         // ============================================
         // GLOBAL VARIABLES
@@ -3380,7 +3507,68 @@ var HTML_TEMPLATES = {
         let currentTheme = 'dark';
 
         // ============================================
-        // PAGE NAVIGATION
+        // SIDEBAR TOGGLE - COMPLETE
+        // ============================================
+        function toggleSidebar() {
+            var sidebar = document.querySelector('.sidebar');
+            var overlay = document.getElementById('sidebar-overlay');
+            var menuIcon = document.querySelector('#menu-icon');
+            
+            if (sidebar) {
+                sidebar.classList.toggle('active');
+            }
+            if (overlay) {
+                overlay.classList.toggle('active');
+            }
+            
+            // تغییر آیکون منو
+            if (menuIcon) {
+                if (sidebar && sidebar.classList.contains('active')) {
+                    menuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>';
+                } else {
+                    menuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>';
+                }
+            }
+        }
+
+        // بستن منو با کلیک روی Overlay
+        document.addEventListener('click', function(event) {
+            var sidebar = document.querySelector('.sidebar');
+            var toggleBtn = document.querySelector('.lg\\:hidden.p-2');
+            var overlay = document.getElementById('sidebar-overlay');
+            
+            if (window.innerWidth < 1024 && sidebar && toggleBtn && overlay) {
+                if (!sidebar.contains(event.target) && !toggleBtn.contains(event.target)) {
+                    sidebar.classList.remove('active');
+                    overlay.classList.remove('active');
+                    
+                    var menuIcon = document.querySelector('#menu-icon');
+                    if (menuIcon) {
+                        menuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>';
+                    }
+                }
+            }
+        });
+
+        // بستن منو با دکمه ESC
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                var sidebar = document.querySelector('.sidebar');
+                var overlay = document.getElementById('sidebar-overlay');
+                if (sidebar && sidebar.classList.contains('active')) {
+                    sidebar.classList.remove('active');
+                    overlay.classList.remove('active');
+                    
+                    var menuIcon = document.querySelector('#menu-icon');
+                    if (menuIcon) {
+                        menuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>';
+                    }
+                }
+            }
+        });
+
+        // ============================================
+        // PAGE NAVIGATION (با بستن خودکار منو در موبایل)
         // ============================================
         function showPage(page) {
             document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
@@ -3397,30 +3585,20 @@ var HTML_TEMPLATES = {
             };
             document.getElementById('page-title').innerText = titles[page][0];
             document.getElementById('page-subtitle').innerText = titles[page][1];
-            if (window.innerWidth < 1024) { toggleSidebar(); }
-        }
-
-        // ============================================
-        // SIDEBAR TOGGLE
-        // ============================================
-        function toggleSidebar() {
-            var sidebar = document.querySelector('.sidebar');
-            var overlay = document.getElementById('sidebar-overlay');
-            if (sidebar) { sidebar.classList.toggle('active'); }
-            if (overlay) { overlay.classList.toggle('active'); }
-        }
-
-        document.addEventListener('click', function(event) {
-            var sidebar = document.querySelector('.sidebar');
-            var toggleBtn = document.querySelector('.lg\\:hidden.p-2');
-            var overlay = document.getElementById('sidebar-overlay');
-            if (window.innerWidth < 1024 && sidebar && toggleBtn && overlay) {
-                if (!sidebar.contains(event.target) && !toggleBtn.contains(event.target)) {
-                    sidebar.classList.remove('active');
-                    overlay.classList.remove('active');
+            
+            // بستن خودکار منو در موبایل بعد از کلیک
+            if (window.innerWidth < 1024) {
+                var sidebar = document.querySelector('.sidebar');
+                var overlay = document.getElementById('sidebar-overlay');
+                if (sidebar) sidebar.classList.remove('active');
+                if (overlay) overlay.classList.remove('active');
+                
+                var menuIcon = document.querySelector('#menu-icon');
+                if (menuIcon) {
+                    menuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>';
                 }
             }
-        });
+        }
 
         // ============================================
         // THEME TOGGLE
@@ -4437,6 +4615,21 @@ var HTML_TEMPLATES = {
                 var cb443 = document.querySelector('input[name="ports"][value="443"]');
                 if (cb443) cb443.checked = true;
             }, 200);
+            
+            // بستن منو با تغییر اندازه صفحه
+            window.addEventListener('resize', function() {
+                if (window.innerWidth >= 1024) {
+                    var sidebar = document.querySelector('.sidebar');
+                    var overlay = document.getElementById('sidebar-overlay');
+                    if (sidebar) sidebar.classList.remove('active');
+                    if (overlay) overlay.classList.remove('active');
+                    
+                    var menuIcon = document.querySelector('#menu-icon');
+                    if (menuIcon) {
+                        menuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>';
+                    }
+                }
+            });
         });
     <\/script>
 </body>
