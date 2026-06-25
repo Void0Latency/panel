@@ -54,7 +54,7 @@
 ### روش ۱: دپلوی خودکار (توسط کاربر)
 
 1. وارد سایت [VoidLatency Deployer](https://voidlatency-deployer.void0latency.workers.dev) شوید
-2. توکن API کلودفلر خود را از [اینجا](https://dash.cloudflare.com/profile/api-tokens) دریافت کنید
+2. توکن API کلودفلر خود را دریافت کنید
 3. توکن را در سایت وارد کرده و روی "Deploy Panel" کلیک کنید
 4. پس از چند لحظه، لینک پنل و رمز عبور ادمین به شما نمایش داده می‌شود
 
