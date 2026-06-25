@@ -27,6 +27,9 @@
 - **صفحه وضعیت کاربر** برای مشاهده مصرف و زمان باقی‌مانده
 - **رابط کاربری مدرن** با الهام از 3x-UI
 - **پروتکل امن VLESS+WS** با پشتیبانی از TLS
+- **سیستم ادمین‌های جداگانه** با لاگین یوزرنیم و پسورد
+- **حجم واقعی ترافیک** با نمایش دقیق مصرف
+- **بیش از ۴۰ API** برای مدیریت و یکپارچه‌سازی
 
 ---
 
@@ -36,11 +39,13 @@
 |-------|---------|
 | 🔒 **VLESS+WS** | پروتکل امن و پرسرعت |
 | 👥 **مدیریت کاربران** | ایجاد، ویرایش و حذف کاربران |
-| 📊 **آمار ترافیک** | مشاهده مصرف لحظه‌ای |
-| 🔑 **پنل ادمین** | کنترل کامل بر کاربران |
+| 📊 **آمار ترافیک** | مشاهده مصرف لحظه‌ای و حجم واقعی |
+| 🔑 **پنل ادمین** | کنترل کامل بر کاربران با سیستم ادمین مجزا |
 | 📱 **لینک اشتراک** | دو فرمت Text و JSON |
 | 🎨 **رابط مدرن** | طراحی الهام گرفته از 3x-UI |
 | ⚡ **دپلوی یک‌کلیک** | نصب در چند ثانیه |
+| 📈 **API های کامل** | بیش از ۴۰ API برای مدیریت |
+| 🛡️ **امنیت پیشرفته** | احراز هویت دو مرحله‌ای |
 
 ---
 
@@ -55,51 +60,21 @@
 
 ### روش ۲: نصب دستی
 
-۱. **کلون کردن ریپازیتوری**
-
 ```
 git clone https://github.com/Void0Latency/panel.git
 cd panel
-```
-
-۲. **نصب وابستگی‌ها**
-
-```
 npm install
-```
-
-۳. **ساخت دیتابیس D1**
-
-```
 npx wrangler d1 create voidlatency-db
-```
-
-(شناسه دیتابیس را در فایل `wrangler.toml` قرار دهید)
-
-۴. **اجرای migrations**
-
-```
 npx wrangler d1 execute voidlatency-db --file=./schema.sql
-```
-
-۵. **دپلوی روی Cloudflare**
-
-```
 npm run deploy
-```
-
-۶. **دریافت لینک پنل**
-
-```
-https://your-worker-name.workers.dev/panel
 ```
 
 ---
 
 ## 📋 پیش‌نیازها
 
-- [حساب Cloudflare](https://dash.cloudflare.com/sign-up) (رایگان)
-- [حساب GitHub](https://github.com/signup) (رایگان)
+- حساب Cloudflare (رایگان)
+- حساب GitHub (رایگان)
 - Node.js 18 یا بالاتر
 
 ---
@@ -113,10 +88,24 @@ https://your-worker-name.workers.dev/panel
 | متنی | `https://your-panel.workers.dev/feed/username` |
 | JSON | `https://your-panel.workers.dev/feed/json/username` |
 | وضعیت | `https://your-panel.workers.dev/status/username` |
+| کانفیگ مستقیم | `https://your-panel.workers.dev/sub/username` |
 
 ---
 
-## 🔧 API Endpoints
+## 🔧 API های کامل
+
+### احراز هویت و مدیریت
+
+| متد | آدرس | توضیحات |
+|-----|------|---------|
+| POST | `/api/login` | ورود با یوزرنیم و پسورد |
+| POST | `/api/setup-password` | تنظیم رمز اولیه پنل |
+| POST | `/api/logout` | خروج از حساب |
+| GET | `/api/auth/verify` | بررسی وضعیت احراز هویت |
+| POST | `/api/change-password` | تغییر رمز پنل |
+| POST | `/api/admin/create` | ایجاد ادمین جدید |
+
+### مدیریت کاربران
 
 | متد | آدرس | توضیحات |
 |-----|------|---------|
@@ -124,23 +113,65 @@ https://your-worker-name.workers.dev/panel
 | POST | `/api/users` | ایجاد کاربر جدید |
 | PUT | `/api/users/{username}` | ویرایش کاربر |
 | DELETE | `/api/users/{username}` | حذف کاربر |
-| GET | `/feed/{username}` | دریافت لینک اشتراک متنی |
-| GET | `/feed/json/{username}` | دریافت لینک اشتراک JSON |
-| GET | `/status/{username}` | مشاهده وضعیت کاربر |
+| GET | `/api/users/{username}` | دریافت اطلاعات کاربر |
+| GET | `/api/users/stats/{username}` | آمار مصرف کاربر |
+| GET | `/api/users/traffic/{username}` | اطلاعات ترافیک کاربر |
+| GET | `/api/users/check/{username}` | بررسی وجود کاربر |
+| GET | `/api/users/config/{username}` | دریافت کانفیگ کاربر |
+| POST | `/api/users/reset/{username}` | ریست ترافیک کاربر |
+| POST | `/api/users/reset-all` | ریست همه ترافیک‌ها |
+| POST | `/api/users/bulk` | ایجاد چند کاربر |
+| GET | `/api/users/online/{username}` | وضعیت آنلاین کاربر |
+| POST | `/api/users/extend/{username}` | تمدید زمان کاربر |
+| POST | `/api/users/add-traffic/{username}` | افزودن حجم به کاربر |
+| POST | `/api/users/rename` | تغییر نام کاربر |
+| GET | `/api/users/export` | خروجی کاربران |
+
+### مدیریت ادمین‌ها
+
+| متد | آدرس | توضیحات |
+|-----|------|---------|
+| GET | `/api/admins` | لیست ادمین‌ها |
+| POST | `/api/admins` | ایجاد ادمین جدید |
+| DELETE | `/api/admins` | حذف ادمین |
+| POST | `/api/admin/change-password` | تغییر رمز ادمین |
+
+### سیستم و تنظیمات
+
+| متد | آدرس | توضیحات |
+|-----|------|---------|
+| GET | `/api/system/stats` | آمار سیستم |
+| GET | `/api/system/info` | اطلاعات سیستم |
+| GET | `/api/health` | وضعیت سلامت |
+| GET | `/api/stats/summary` | خلاصه آمار |
+| POST | `/api/xray` | کنترل Xray |
+| GET | `/api/xray/status` | وضعیت Xray |
+| POST | `/api/theme` | تغییر تم |
+| GET | `/api/theme` | دریافت تم فعلی |
+| POST | `/api/proxy-ip` | تنظیمات پروکسی |
+| GET | `/api/proxy-ip` | دریافت تنظیمات پروکسی |
+| GET | `/api/update-check` | بررسی بروزرسانی |
+| GET | `/api/logs` | دریافت لاگ‌ها |
+| GET | `/api/panel/config` | تنظیمات پنل |
+| GET | `/api/subscription/{username}` | لینک‌های اشتراک کاربر |
+| GET | `/api/status/{username}` | وضعیت عمومی کاربر |
+
+### اشتراک‌گذاری
+
+| متد | آدرس | توضیحات |
+|-----|------|---------|
+| GET | `/feed/{username}` | لینک اشتراک متنی |
+| GET | `/feed/json/{username}` | لینک اشتراک JSON |
+| GET | `/sub/{username}` | لینک اشتراک ساده |
+| GET | `/status/{username}` | صفحه وضعیت کاربر |
+| GET | `/locations` | لیست لوکیشن‌ها |
 
 ---
 
 ## 🛠️ توسعه و سفارشی‌سازی
 
-برای اجرا در محیط توسعه:
-
 ```
 npm run dev
-```
-
-برای دپلوی روی Cloudflare:
-
-```
 npm run deploy
 ```
 
@@ -150,23 +181,14 @@ npm run deploy
 
 ```
 panel/
-├── voidlatency-core.js    # کد اصلی پنل
+├── voidlatency-core.js    # کد اصلی پنل (Full)
 ├── schema.sql             # ساختار دیتابیس
 ├── wrangler.toml          # تنظیمات Cloudflare
 ├── package.json           # وابستگی‌ها
 ├── deploy.sh              # اسکریپت دپلوی خودکار
+├── LICENSE                # لایسنس MIT
 └── README.md              # مستندات
 ```
-
----
-
-## 🤝 مشارکت در توسعه
-
-1. ریپازیتوری را Fork کنید
-2. برنچ جدید بسازید (`git checkout -b feature/amazing`)
-3. تغییرات را commit کنید (`git commit -m 'Add amazing feature'`)
-4. به برنچ Push کنید (`git push origin feature/amazing`)
-5. Pull Request باز کنید
 
 ---
 
