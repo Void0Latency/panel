@@ -1381,25 +1381,29 @@ var SubscriptionService = {
     const usedFormatted = usedGB >= 1 ? usedGB.toFixed(1) + "GB" : (usedGB * 1024).toFixed(0) + "MB";
     const totalFormatted = totalGB >= 1 ? totalGB + "GB" : "Unlimited";
     
+    // فقط دو کانفیگ اطلاعاتی برای اولین IP و پورت
+    const firstIp = ips[0] || host;
+    const firstPort = ports[0] || "443";
+    const isTlsPort = ["443", "2053", "2083", "2087", "2096", "8443"].includes(firstPort);
+    const tlsVal = isTlsPort ? "tls" : "none";
+    
+    // کانفیگ اطلاعات 1: تاریخ انقضا
+    const remark1 = "⏳ " + user.username.toUpperCase() + " | 📅 Exp: " + expiryDateStr + " | 🔥 " + daysLeft + " Days Left";
+    const configObj1 = this.buildConfig(user, firstIp, firstPort, tlsVal, host, fp, fragLen, fragInt, remark1);
+    configArray.push(configObj1);
+    
+    // کانفیگ اطلاعات 2: حجم مصرفی
+    const remark2 = "📊 " + user.username.toUpperCase() + " | 💾 " + totalFormatted + " Total | ⚡ " + usedFormatted + " Used";
+    const configObj2 = this.buildConfig(user, firstIp, firstPort, tlsVal, host, fp, fragLen, fragInt, remark2);
+    configArray.push(configObj2);
+    
+    // کانفیگ‌های باقی‌مده برای تمام آیپی‌ها و پورت‌ها با اسم کاربر
     ips.forEach((ip) => {
-      ports.forEach((portStr, portIndex) => {
-        const isTlsPort = ["443", "2053", "2083", "2087", "2096", "8443"].includes(portStr);
-        const tlsVal = isTlsPort ? "tls" : "none";
-        
-        // Only first port gets info configs
-        if (portIndex === 0 && ports.length > 0) {
-          const remark1 = "⏳ " + user.username.toUpperCase() + " | 📅 Exp: " + expiryDateStr + " | 🔥 " + daysLeft + " Days Left";
-          const configObj1 = this.buildConfig(user, ip, portStr, tlsVal, host, fp, fragLen, fragInt, remark1);
-          configArray.push(configObj1);
-          
-          const remark2 = "📊 " + user.username.toUpperCase() + " | 💾 " + totalFormatted + " Total | ⚡ " + usedFormatted + " Used";
-          const configObj2 = this.buildConfig(user, ip, portStr, tlsVal, host, fp, fragLen, fragInt, remark2);
-          configArray.push(configObj2);
-        }
-        
-        // All configs (including first port) get the username config
+      ports.forEach((portStr) => {
+        const isTlsPortLoop = ["443", "2053", "2083", "2087", "2096", "8443"].includes(portStr);
+        const tlsValLoop = isTlsPortLoop ? "tls" : "none";
         const remark3 = configName;
-        const configObj3 = this.buildConfig(user, ip, portStr, tlsVal, host, fp, fragLen, fragInt, remark3);
+        const configObj3 = this.buildConfig(user, ip, portStr, tlsValLoop, host, fp, fragLen, fragInt, remark3);
         configArray.push(configObj3);
       });
     });
@@ -1526,21 +1530,28 @@ var SubscriptionService = {
     const totalFormatted = totalGB >= 1 ? totalGB + "GB" : "Unlimited";
     
     const links = [];
+    
+    // فقط دو کانفیگ اطلاعاتی برای اولین IP و پورت
+    const firstIp = ips[0] || host;
+    const firstPort = ports[0] || "443";
+    const isTlsPort = ["443", "2053", "2083", "2087", "2096", "8443"].includes(firstPort);
+    const tlsVal = isTlsPort ? "tls" : "none";
+    
+    // کانفیگ اطلاعات 1: تاریخ انقضا
+    const remark1 = "⏳ " + user.username.toUpperCase() + " | 📅 Exp: " + expiryDateStr + " | 🔥 " + daysLeft + " Days Left";
+    links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + firstIp + ":" + firstPort + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark1));
+    
+    // کانفیگ اطلاعات 2: حجم مصرفی
+    const remark2 = "📊 " + user.username.toUpperCase() + " | 💾 " + totalFormatted + " Total | ⚡ " + usedFormatted + " Used";
+    links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + firstIp + ":" + firstPort + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark2));
+    
+    // کانفیگ‌های باقی‌مده برای تمام آیپی‌ها و پورت‌ها با اسم کاربر
     ips.forEach((ip) => {
-      ports.forEach((portStr, portIndex) => {
-        const isTlsPort = ["443", "2053", "2083", "2087", "2096", "8443"].includes(portStr);
-        const tlsVal = isTlsPort ? "tls" : "none";
-        
-        if (portIndex === 0 && ports.length > 0) {
-          const remark1 = "⏳ " + user.username.toUpperCase() + " | 📅 Exp: " + expiryDateStr + " | 🔥 " + daysLeft + " Days Left";
-          links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + ip + ":" + portStr + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark1));
-          
-          const remark2 = "📊 " + user.username.toUpperCase() + " | 💾 " + totalFormatted + " Total | ⚡ " + usedFormatted + " Used";
-          links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + ip + ":" + portStr + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark2));
-        }
-        
+      ports.forEach((portStr) => {
+        const isTlsPortLoop = ["443", "2053", "2083", "2087", "2096", "8443"].includes(portStr);
+        const tlsValLoop = isTlsPortLoop ? "tls" : "none";
         const remark3 = configName;
-        links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + ip + ":" + portStr + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark3));
+        links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + ip + ":" + portStr + "?path=%2F&security=" + tlsValLoop + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark3));
       });
     });
     
@@ -3931,23 +3942,27 @@ var HTML_TEMPLATES = {
             var configName = user.config_name || user.username;
             var links = [];
             
-            // پردازش تمام آیپی‌ها
+            // First IP and first port for info configs
+            var firstIp = ips[0] || host;
+            var firstPort = ports[0] || '443';
+            var isTlsPort = tlsPorts.includes(firstPort);
+            var tlsVal = isTlsPort ? 'tls' : 'none';
+            
+            // Config 1: Expiry
+            var remark1 = '⏳ ' + user.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
+            links.push('vle' + 'ss://' + (user.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
+            
+            // Config 2: Usage
+            var remark2 = '📊 ' + user.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
+            links.push('vle' + 'ss://' + (user.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
+            
+            // Configs for all IPs and ports with just username
             ips.forEach(function(ip) {
                 ports.forEach(function(portStr) {
-                    var isTlsPort = tlsPorts.includes(portStr);
-                    var tlsVal = isTlsPort ? 'tls' : 'none';
-                    
-                    // کانفیگ 1: تاریخ انقضا
-                    var remark1 = '⏳ ' + user.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
-                    links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
-                    
-                    // کانفیگ 2: حجم مصرفی
-                    var remark2 = '📊 ' + user.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
-                    links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
-                    
-                    // کانفیگ 3: فقط اسم کاربر
+                    var isTlsPortLoop = tlsPorts.includes(portStr);
+                    var tlsValLoop = isTlsPortLoop ? 'tls' : 'none';
                     var remark3 = configName;
-                    links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark3));
+                    links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsValLoop + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark3));
                 });
             });
             
@@ -3992,97 +4007,119 @@ var HTML_TEMPLATES = {
             var fp = user.fingerprint || 'chrome';
             var configArray = [];
             
-            // پردازش تمام آیپی‌ها
+            // First IP and first port for info configs
+            var firstIp = ips[0] || host;
+            var firstPort = ports[0] || '443';
+            var isTlsPort = tlsPorts.includes(firstPort);
+            var tlsVal = isTlsPort ? 'tls' : 'none';
+            
+            // Config 1: Expiry
+            var remark1 = '⏳ ' + user.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
+            var jsonConfig1 = buildJsonConfig(user, firstIp, firstPort, tlsVal, host, fp, remark1);
+            configArray.push(jsonConfig1);
+            
+            // Config 2: Usage
+            var remark2 = '📊 ' + user.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
+            var jsonConfig2 = buildJsonConfig(user, firstIp, firstPort, tlsVal, host, fp, remark2);
+            configArray.push(jsonConfig2);
+            
+            // Configs for all IPs and ports with just username
             ips.forEach(function(ip) {
                 ports.forEach(function(portStr) {
-                    var isTlsPort = tlsPorts.includes(portStr);
-                    var tlsVal = isTlsPort ? 'tls' : 'none';
-                    var remark = user.config_name || user.username;
-                    var jsonConfig = {
-                        "remarks": remark,
-                        "version": { "min": "25.10.15" },
-                        "log": { "loglevel": "none" },
-                        "dns": {
-                            "servers": [
-                                { "address": "https://8.8.8.8/dns-query", "tag": "remote-dns" },
-                                { "address": "8.8.8.8", "domains": ["full:" + host], "skipFallback": true }
-                            ],
-                            "queryStrategy": "UseIP",
-                            "tag": "dns"
-                        },
-                        "inbounds": [
-                            {
-                                "listen": "127.0.0.1", "port": 10808, "protocol": "socks",
-                                "settings": { "auth": "noauth", "udp": true },
-                                "sniffing": { "destOverride": ["http", "tls"], "enabled": true, "routeOnly": true },
-                                "tag": "mixed-in"
-                            },
-                            {
-                                "listen": "127.0.0.1", "port": 10853, "protocol": "dokodemo-door",
-                                "settings": { "address": "1.1.1.1", "network": "tcp,udp", "port": 53 },
-                                "tag": "dns-in"
-                            }
-                        ],
-                        "outbounds": [
-                            {
-                                "protocol": "vle" + "ss",
-                                "settings": {
-                                    ["vne" + "xt"]: [
-                                        { "address": ip, "port": parseInt(portStr), "users": [{ "id": user.uuid, "encryption": "none" }] }
-                                    ]
-                                },
-                                ["stream" + "Settings"]: {
-                                    "network": "ws",
-                                    ["ws" + "Settings"]: { "host": host, "path": "/" },
-                                    "security": tlsVal,
-                                    "sockopt": { ["dialer" + "Proxy"]: "fragment" }
-                                },
-                                "tag": "proxy"
-                            },
-                            {
-                                "protocol": "freedom",
-                                "settings": {
-                                    "fragment": {
-                                        "packets": "tlshello",
-                                        "length": window.globalFragLen || "20-30",
-                                        "interval": window.globalFragInt || "1-2"
-                                    }
-                                },
-                                "streamSettings": {
-                                    "sockopt": {
-                                        "domainStrategy": "UseIP",
-                                        "happyEyeballs": { "tryDelayMs": 250, "prioritizeIPv6": false, "interleave": 2, "maxConcurrentTry": 4 }
-                                    }
-                                },
-                                "tag": "fragment"
-                            },
-                            { "protocol": "dns", "settings": { "nonIPQuery": "reject" }, "tag": "dns-out" },
-                            { "protocol": "freedom", "settings": { "domainStrategy": "UseIP" }, "tag": "direct" },
-                            { "protocol": "blackhole", "settings": { "response": { "type": "http" } }, "tag": "block" }
-                        ],
-                        "routing": {
-                            "domainStrategy": "IPIfNonMatch",
-                            "rules": [
-                                { "inboundTag": ["mixed-in"], "port": 53, "outboundTag": "dns-out", "type": "field" },
-                                { "inboundTag": ["dns-in"], "outboundTag": "dns-out", "type": "field" },
-                                { "inboundTag": ["remote-dns"], "outboundTag": "proxy", "type": "field" },
-                                { "inboundTag": ["dns"], "outboundTag": "direct", "type": "field" },
-                                { "domain": ["geosite:private"], "outboundTag": "direct", "type": "field" },
-                                { "ip": ["geoip:private"], "outboundTag": "direct", "type": "field" },
-                                { "network": "udp", "outboundTag": "block", "type": "field" },
-                                { "network": "tcp", "outboundTag": "proxy", "type": "field" }
-                            ]
-                        }
-                    };
-                    if (tlsVal === 'tls') {
-                        jsonConfig.outbounds[0]["stream" + "Settings"]["tls" + "Settings"] = {
-                            "serverName": host, "fingerprint": fp, "alpn": ["http/1.1"], "allowInsecure": false
-                        };
-                    }
-                    configArray.push(jsonConfig);
+                    var isTlsPortLoop = tlsPorts.includes(portStr);
+                    var tlsValLoop = isTlsPortLoop ? 'tls' : 'none';
+                    var remark3 = user.config_name || user.username;
+                    var jsonConfig3 = buildJsonConfig(user, ip, portStr, tlsValLoop, host, fp, remark3);
+                    configArray.push(jsonConfig3);
                 });
             });
+            
             navigator.clipboard.writeText(JSON.stringify(configArray, null, 2)).then(function() { alert('✅ JSON config copied!'); });
+        }
+
+        function buildJsonConfig(user, ip, portStr, tlsVal, host, fp, remark) {
+            var jsonConfig = {
+                "remarks": remark,
+                "version": { "min": "25.10.15" },
+                "log": { "loglevel": "none" },
+                "dns": {
+                    "servers": [
+                        { "address": "https://8.8.8.8/dns-query", "tag": "remote-dns" },
+                        { "address": "8.8.8.8", "domains": ["full:" + host], "skipFallback": true }
+                    ],
+                    "queryStrategy": "UseIP",
+                    "tag": "dns"
+                },
+                "inbounds": [
+                    {
+                        "listen": "127.0.0.1", "port": 10808, "protocol": "socks",
+                        "settings": { "auth": "noauth", "udp": true },
+                        "sniffing": { "destOverride": ["http", "tls"], "enabled": true, "routeOnly": true },
+                        "tag": "mixed-in"
+                    },
+                    {
+                        "listen": "127.0.0.1", "port": 10853, "protocol": "dokodemo-door",
+                        "settings": { "address": "1.1.1.1", "network": "tcp,udp", "port": 53 },
+                        "tag": "dns-in"
+                    }
+                ],
+                "outbounds": [
+                    {
+                        "protocol": "vle" + "ss",
+                        "settings": {
+                            ["vne" + "xt"]: [
+                                { "address": ip, "port": parseInt(portStr), "users": [{ "id": user.uuid, "encryption": "none" }] }
+                            ]
+                        },
+                        ["stream" + "Settings"]: {
+                            "network": "ws",
+                            ["ws" + "Settings"]: { "host": host, "path": "/" },
+                            "security": tlsVal,
+                            "sockopt": { ["dialer" + "Proxy"]: "fragment" }
+                        },
+                        "tag": "proxy"
+                    },
+                    {
+                        "protocol": "freedom",
+                        "settings": {
+                            "fragment": {
+                                "packets": "tlshello",
+                                "length": window.globalFragLen || "20-30",
+                                "interval": window.globalFragInt || "1-2"
+                            }
+                        },
+                        "streamSettings": {
+                            "sockopt": {
+                                "domainStrategy": "UseIP",
+                                "happyEyeballs": { "tryDelayMs": 250, "prioritizeIPv6": false, "interleave": 2, "maxConcurrentTry": 4 }
+                            }
+                        },
+                        "tag": "fragment"
+                    },
+                    { "protocol": "dns", "settings": { "nonIPQuery": "reject" }, "tag": "dns-out" },
+                    { "protocol": "freedom", "settings": { "domainStrategy": "UseIP" }, "tag": "direct" },
+                    { "protocol": "blackhole", "settings": { "response": { "type": "http" } }, "tag": "block" }
+                ],
+                "routing": {
+                    "domainStrategy": "IPIfNonMatch",
+                    "rules": [
+                        { "inboundTag": ["mixed-in"], "port": 53, "outboundTag": "dns-out", "type": "field" },
+                        { "inboundTag": ["dns-in"], "outboundTag": "dns-out", "type": "field" },
+                        { "inboundTag": ["remote-dns"], "outboundTag": "proxy", "type": "field" },
+                        { "inboundTag": ["dns"], "outboundTag": "direct", "type": "field" },
+                        { "domain": ["geosite:private"], "outboundTag": "direct", "type": "field" },
+                        { "ip": ["geoip:private"], "outboundTag": "direct", "type": "field" },
+                        { "network": "udp", "outboundTag": "block", "type": "field" },
+                        { "network": "tcp", "outboundTag": "proxy", "type": "field" }
+                    ]
+                }
+            };
+            if (tlsVal === 'tls') {
+                jsonConfig.outbounds[0]["stream" + "Settings"]["tls" + "Settings"] = {
+                    "serverName": host, "fingerprint": fp, "alpn": ["http/1.1"], "allowInsecure": false
+                };
+            }
+            return jsonConfig;
         }
 
         function showQR(encodedUsername) {
@@ -4792,22 +4829,31 @@ var HTML_TEMPLATES = {
             var configName = u.config_name || u.username;
             
             var links = [];
-            // پردازش تمام آیپی‌ها
+            
+            // First IP and first port for info configs
+            var firstIp = ips[0] || host;
+            var firstPort = ports[0] || '443';
+            var isTlsPort = ['443', '2053', '2083', '2087', '2096', '8443'].includes(firstPort);
+            var tlsVal = isTlsPort ? 'tls' : 'none';
+            
+            // Config 1: Expiry
+            var remark1 = '⏳ ' + u.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
+            links.push('vle' + 'ss://' + (u.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
+            
+            // Config 2: Usage
+            var remark2 = '📊 ' + u.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
+            links.push('vle' + 'ss://' + (u.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
+            
+            // Configs for all IPs and ports with just username
             ips.forEach(function(ip) {
                 ports.forEach(function(portStr) {
-                    var isTlsPort = ['443', '2053', '2083', '2087', '2096', '8443'].includes(portStr);
-                    var tlsVal = isTlsPort ? 'tls' : 'none';
-                    
-                    var remark1 = '⏳ ' + u.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
-                    links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
-                    
-                    var remark2 = '📊 ' + u.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
-                    links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
-                    
+                    var isTlsPortLoop = ['443', '2053', '2083', '2087', '2096', '8443'].includes(portStr);
+                    var tlsValLoop = isTlsPortLoop ? 'tls' : 'none';
                     var remark3 = configName;
-                    links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark3));
+                    links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsValLoop + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark3));
                 });
             });
+            
             return links.join('\\n');
         }
 
