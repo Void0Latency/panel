@@ -7,12 +7,6 @@ binding = "VL_DB"
 database_name = "voidlatency-db"
 database_id = ""
 
-# ============================================
-# CRON TRIGGER - Daily traffic reset at 03:30 UTC
-# ============================================
-[[triggers]]
-crons = ["30 3 * * *"]
-
 [vars]
 NODE_VERSION = "18"
 
