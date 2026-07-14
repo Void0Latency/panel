@@ -7,11 +7,6 @@ binding = "VL_DB"
 database_name = "voidlatency-db"
 database_id = ""
 
-[triggers]
-# 00:00 UTC == 03:30 Asia/Tehran (UTC+3:30, no DST). Daily traffic reset;
-# only runs when "reset_scheduler" is enabled in Panel Settings.
-crons = ["0 0 * * *"]
-
 [vars]
 NODE_VERSION = "18"
 

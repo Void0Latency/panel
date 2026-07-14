@@ -8,40 +8,8 @@ import { connect } from "cloudflare:sockets";
 // BACKEND CONSTANTS & VARIABLES
 // ============================================
 var GLOBAL_TRAFFIC_CACHE = /* @__PURE__ */ new Map();
-var GLOBAL_UP_CACHE = /* @__PURE__ */ new Map();
-var GLOBAL_DOWN_CACHE = /* @__PURE__ */ new Map();
 var ACTIVE_CONNECTIONS_COUNT = /* @__PURE__ */ new Map();
 var GLOBAL_LAST_ACTIVE_WRITE = /* @__PURE__ */ new Map();
-// Rolling window of recent request timestamps (per isolate) used to estimate
-// live TCP connection count from real panel/API activity.
-var REQUEST_TIMESTAMPS = [];
-var REQUEST_WINDOW_MS = 60 * 1e3;
-function recordRequest() {
-  const now = Date.now();
-  REQUEST_TIMESTAMPS.push(now);
-  const cutoff = now - REQUEST_WINDOW_MS;
-  while (REQUEST_TIMESTAMPS.length && REQUEST_TIMESTAMPS[0] < cutoff) {
-    REQUEST_TIMESTAMPS.shift();
-  }
-}
-function recentRequestRate(windowMs = REQUEST_WINDOW_MS) {
-  const cutoff = Date.now() - windowMs;
-  let count = 0;
-  for (let i = REQUEST_TIMESTAMPS.length - 1; i >= 0; i--) {
-    if (REQUEST_TIMESTAMPS[i] >= cutoff) count++;
-    else break;
-  }
-  return count;
-}
-// Published Cloudflare IPv4 ranges (base + /prefix). Used to render believable
-// edge IPs on the dashboard "IP Addresses" card without leaking a real origin.
-var CLOUDFLARE_IPV4_RANGES = [
-  ["173.245.48.0", 20], ["103.21.244.0", 22], ["103.22.200.0", 22],
-  ["103.31.4.0", 22], ["141.101.64.0", 18], ["108.162.192.0", 18],
-  ["190.93.240.0", 20], ["188.114.96.0", 20], ["197.234.240.0", 22],
-  ["198.41.128.0", 17], ["162.158.0.0", 15], ["104.16.0.0", 13],
-  ["104.24.0.0", 14], ["172.64.0.0", 13], ["131.0.72.0", 22]
-];
 var DNS_CACHE = /* @__PURE__ */ new Map();
 var DNS_CACHE_TTL = 5 * 60 * 1e3;
 var DOH_RESOLVER = "https://cloudflare-dns.com/dns-query";
@@ -53,6 +21,7 @@ var DOWNSTREAM_GRAIN_TAIL_THRESHOLD = 512;
 var DOWNSTREAM_GRAIN_SILENT_MS = 1;
 var TCP_CONCURRENCY = 2;
 var PRELOAD_RACE_DIAL = true;
+var xrayStatus = { running: true, uptime: 0, startTime: Date.now() };
 var SYSTEM_STATS = {
   cpu: { cores: 48, load: [12.5, 11.4, 11.6] },
   ram: { used: 159.30, total: 322.69 },
@@ -62,44 +31,22 @@ var SYSTEM_STATS = {
 var ADMINS = [];
 var PANEL_VERSION = "2.9.4";
 var THEME = "dark";
-var DEFAULT_PATH_ID = "@VoidLatency";
-// Normalize a path identifier ("@VoidLatency" / "@VoidLatency_X") into the actual
-// URL path used by the VLESS WebSocket transport, e.g. "/@VoidLatency".
-function pathIdToWsPath(pathId) {
-  let id = (pathId || DEFAULT_PATH_ID).trim();
-  if (!id) id = DEFAULT_PATH_ID;
-  return id.startsWith("/") ? id : "/" + id;
-}
-// Produce a believable edge IP inside a real Cloudflare range (see
-// CLOUDFLARE_IPV4_RANGES) for the dashboard "IP Addresses" card.
-function randomCloudflareIp() {
-  const [base, prefix] = CLOUDFLARE_IPV4_RANGES[Math.floor(Math.random() * CLOUDFLARE_IPV4_RANGES.length)];
-  const baseParts = base.split(".").map(Number);
-  const baseInt = ((baseParts[0] << 24) | (baseParts[1] << 16) | (baseParts[2] << 8) | baseParts[3]) >>> 0;
-  const hostBits = 32 - prefix;
-  const size = hostBits >= 31 ? 0xffffffff : (1 << hostBits) - 1;
-  // Avoid network/broadcast edges for a more host-like address.
-  const offset = size > 2 ? 1 + Math.floor(Math.random() * (size - 1)) : Math.floor(Math.random() * (size + 1));
-  const ipInt = (baseInt + offset) >>> 0;
-  return [(ipInt >>> 24) & 255, (ipInt >>> 16) & 255, (ipInt >>> 8) & 255, ipInt & 255].join(".");
-}
 
 // ============================================
 // MAIN APPLICATION
 // ============================================
 var voidlatency_core_default = {
   async fetch(request, env, ctx) {
-    recordRequest();
     await DbService.ensureSchema(env.VL_DB);
     await loadAdmins(env);
     const url = new URL(request.url);
-
-    if (Router.isWebSocketUpgrade(request)) {
-      return await Router.handleWebSocket(request, env, ctx, url.pathname);
+    
+    if (Router.isWebSocketUpgrade(request) && url.pathname === "/") {
+      return await Router.handleWebSocket(request, env, ctx);
     }
     
     if (Router.isSubscriptionPath(url.pathname)) {
-      return await Router.handleSubscription(url, env, request);
+      return await Router.handleSubscription(url, env);
     }
     
     if (url.pathname.startsWith("/api/") || url.pathname === "/locations") {
@@ -117,22 +64,6 @@ var voidlatency_core_default = {
     return new Response(HTML_TEMPLATES.nginx, {
       headers: { "Content-Type": "text/html; charset=utf-8" }
     });
-  },
-
-  // Cron Trigger entry point. Configured in wrangler.toml as "0 0 * * *" (UTC),
-  // which is 03:30 in Tehran (UTC+3:30, no DST). Only resets when the admin has
-  // enabled the scheduler in Panel Settings.
-  async scheduled(event, env, ctx) {
-    const run = async () => {
-      try {
-        await DbService.ensureSchema(env.VL_DB);
-        const enabled = (await DbService.getSetting(env.VL_DB, "reset_scheduler", "0")) === "1";
-        if (!enabled) return;
-        await resetAllTraffic(env);
-        await DbService.setSetting(env.VL_DB, "last_scheduled_reset", String(Date.now()));
-      } catch (e) {}
-    };
-    ctx.waitUntil(run());
   }
 };
 
@@ -167,24 +98,8 @@ var Router = {
   isSubscriptionPath(pathname) {
     return pathname.startsWith("/sub/") || pathname.startsWith("/feed/");
   },
-  async handleWebSocket(request, env, ctx, pathname = "/") {
+  async handleWebSocket(request, env, ctx) {
     try {
-      // Reject the transport entirely when Xray is "stopped" so issued configs
-      // genuinely fail rather than the UI merely changing color.
-      const running = (await DbService.getSetting(env.VL_DB, "xray_running", "1")) === "1";
-      if (!running) {
-        return new Response("Service Unavailable", { status: 503 });
-      }
-      // Accept the upgrade only on the configured VLESS path (or legacy "/" for
-      // clients that still hold an older config). The path setting is read live,
-      // so changing it takes effect immediately.
-      const pathId = await DbService.getSetting(env.VL_DB, "vless_path", DEFAULT_PATH_ID);
-      const wsPath = pathIdToWsPath(pathId);
-      let decodedPath = pathname;
-      try { decodedPath = decodeURIComponent(pathname); } catch (e) {}
-      if (pathname !== "/" && pathname !== wsPath && decodedPath !== wsPath) {
-        return new Response("Not Found", { status: 404 });
-      }
       let proxyIP = "proxyip.cmliussss.net";
       try {
         const proxyRow = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'proxy_ip'").first();
@@ -198,49 +113,25 @@ var Router = {
       return new Response("Internal Server Error", { status: 500 });
     }
   },
-  // Single canonical subscription endpoint: /sub/:username.
-  //   - default            -> base64 text feed (v2rayNG / v2Box / Streisand import this)
-  //   - ?format=json        -> JSON array of full Xray configs
-  //   - Accept: application/json -> same JSON variant
-  // Both variants carry the Subscription-Userinfo + Profile-* headers so apps can
-  // display usage and expiry. /feed/:username and /feed/json/:username remain as
-  // undocumented backward-compatible aliases so previously issued links keep working.
-  async handleSubscription(url, env, request = null) {
-    let rest;
-    if (url.pathname.startsWith("/sub/")) rest = url.pathname.slice(5);
-    else if (url.pathname.startsWith("/feed/")) rest = url.pathname.slice(6);
-    else return new Response("Not Found", { status: 404 });
-
-    let wantJson = url.searchParams.get("format") === "json";
-    // Legacy /feed/json/:username alias.
-    if (rest.startsWith("json/")) {
-      wantJson = true;
-      rest = rest.slice(5);
-    }
-    if (!wantJson && request) {
-      const accept = (request.headers.get("Accept") || "").toLowerCase();
-      if (accept.includes("application/json")) wantJson = true;
-    }
-    const subUser = decodeURIComponent(rest);
+  async handleSubscription(url, env) {
+    const isSubPath = url.pathname.startsWith("/sub/");
+    const offset = isSubPath ? 5 : 6;
+    let subUser = decodeURIComponent(url.pathname.slice(offset));
     const host = url.hostname;
+    const isJson = !isSubPath && subUser.startsWith("json/");
+    if (isJson) {
+      subUser = subUser.slice(5);
+    }
     try {
       const user = await env.VL_DB.prepare("SELECT * FROM users WHERE username = ? OR uuid = ?").bind(subUser, subUser).first();
       if (!user || user.connection_type !== atob("dmxlc3M=")) {
         return new Response("Not Found", { status: 404 });
       }
-      // When Xray is stopped, issued configs must genuinely fail rather than
-      // silently serve a config that then can't connect.
-      const running = (await DbService.getSetting(env.VL_DB, "xray_running", "1")) === "1";
-      if (!running) {
-        return new Response("Service Unavailable", {
-          status: 503,
-          headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }
-        });
-      }
-      if (wantJson) {
+      if (isJson) {
         return await SubscriptionService.generateJson(user, host, env);
+      } else {
+        return await SubscriptionService.generateText(user, host);
       }
-      return await SubscriptionService.generateText(user, host, env);
     } catch (err) {
       return new Response("Error building config: " + err.message, { status: 500 });
     }
@@ -286,10 +177,9 @@ var Router = {
         fingerprint: user.fingerprint || "chrome",
         config_name: user.config_name || user.username
       });
-      const pathId = await DbService.getSetting(env.VL_DB, "vless_path", DEFAULT_PATH_ID);
       const html = HTML_TEMPLATES.status.replace(
         "/* {{USER_DATA_PLACEHOLDER}} */",
-        "window.statusUser = " + userJson + "; window.globalPath = " + JSON.stringify(pathId) + ";"
+        "window.statusUser = " + userJson + ";"
       );
       return new Response(html, {
         headers: { "Content-Type": "text/html; charset=utf-8" }
@@ -529,30 +419,26 @@ var Router = {
     if (url.pathname === "/api/xray" && request.method === "POST") {
       if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
       const { action } = await request.json();
-      const now = Date.now();
       if (action === "stop") {
-        await DbService.setSetting(env.VL_DB, "xray_running", "0");
-        await DbService.setSetting(env.VL_DB, "xray_stopped_at", String(now));
+        xrayStatus.running = false;
         return new Response(JSON.stringify({ success: true, status: "stopped" }));
       } else if (action === "start") {
-        await DbService.setSetting(env.VL_DB, "xray_running", "1");
-        await DbService.setSetting(env.VL_DB, "xray_started_at", String(now));
+        xrayStatus.running = true;
+        xrayStatus.startTime = Date.now();
         return new Response(JSON.stringify({ success: true, status: "started" }));
       } else if (action === "restart") {
-        await DbService.setSetting(env.VL_DB, "xray_running", "1");
-        await DbService.setSetting(env.VL_DB, "xray_started_at", String(now));
+        xrayStatus.running = true;
+        xrayStatus.startTime = Date.now();
         return new Response(JSON.stringify({ success: true, status: "restarted" }));
       }
       return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400 });
     }
-
+    
     if (url.pathname === "/api/xray/status") {
-      const running = (await DbService.getSetting(env.VL_DB, "xray_running", "1")) === "1";
-      const startedAt = parseInt(await DbService.getSetting(env.VL_DB, "xray_started_at", await DbService.getSetting(env.VL_DB, "deploy_time", String(Date.now()))), 10);
-      const uptime = running ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0;
+      const uptime = xrayStatus.running ? Math.floor((Date.now() - xrayStatus.startTime) / 1000) : 0;
       return new Response(JSON.stringify({
-        running,
-        uptime,
+        running: xrayStatus.running,
+        uptime: uptime,
         version: "v26.4.25",
         memory: "50.98 MB",
         threads: 14
@@ -581,40 +467,14 @@ var Router = {
     // ============================================
     if (url.pathname === "/api/system/stats") {
       const now = Date.now();
-      const deployTime = parseInt(await DbService.getSetting(env.VL_DB, "deploy_time", String(now)), 10);
-      const running = (await DbService.getSetting(env.VL_DB, "xray_running", "1")) === "1";
-      const startedAt = parseInt(await DbService.getSetting(env.VL_DB, "xray_started_at", String(deployTime)), 10);
-      const panelUptimeSec = Math.max(0, Math.floor((now - deployTime) / 1000));
-      const xrayUptimeSec = running ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
-      const pathId = await DbService.getSetting(env.VL_DB, "vless_path", DEFAULT_PATH_ID);
-      // Real usage split, in GB, for the Data Sent / Received cards.
-      let sentGb = 0, recvGb = 0, onlineCount = 0;
-      try {
-        const agg = await env.VL_DB.prepare("SELECT COALESCE(SUM(used_down_gb),0) AS down, COALESCE(SUM(used_up_gb),0) AS up FROM users").first();
-        sentGb = agg?.down || 0;
-        recvGb = agg?.up || 0;
-        const on = await env.VL_DB.prepare("SELECT COUNT(*) AS c FROM users WHERE last_active > ?").bind(now - 65e3).first();
-        onlineCount = on?.c || 0;
-      } catch (e) {}
-      // TCP: real live activity. Recent request rate against this isolate plus
-      // one connection per currently-online user. UDP is always 0 (VLESS+WS is TCP-only).
-      const tcp = recentRequestRate(1e4) + onlineCount;
+      const uptime = xrayStatus.running ? Math.floor((now - xrayStatus.startTime) / 1000) : 0;
       return new Response(JSON.stringify({
-        base: {
-          cpu: SYSTEM_STATS.cpu,
-          ram: SYSTEM_STATS.ram,
-          swap: SYSTEM_STATS.swap,
-          storage: SYSTEM_STATS.storage
-        },
-        connections: { tcp, udp: 0 },
-        data: { sent_gb: sentGb, received_gb: recvGb },
-        panel_uptime: panelUptimeSec,
-        xray_uptime: xrayUptimeSec,
-        xray_running: running,
-        deploy_time: deployTime,
-        path_id: pathId,
-        host: url.hostname,
-        ips: [randomCloudflareIp(), randomCloudflareIp()],
+        cpu: SYSTEM_STATS.cpu,
+        ram: SYSTEM_STATS.ram,
+        swap: SYSTEM_STATS.swap,
+        storage: SYSTEM_STATS.storage,
+        uptime: "26d 3h",
+        xray_uptime: uptime,
         version: PANEL_VERSION,
         theme: THEME
       }), {
@@ -656,25 +516,11 @@ var Router = {
     if (url.pathname === "/api/proxy-ip") {
       if (request.method === "POST") {
         if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-        const { proxy_ip, iata, frag_len, frag_int, path, reset_scheduler } = await request.json();
+        const { proxy_ip, iata, frag_len, frag_int } = await request.json();
         if (proxy_ip) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('proxy_ip', ?)").bind(proxy_ip).run();
         if (iata !== void 0) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('proxy_location_iata', ?)").bind(iata).run();
         if (frag_len !== void 0) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('frag_len', ?)").bind(frag_len).run();
         if (frag_int !== void 0) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('frag_int', ?)").bind(frag_int).run();
-        if (path !== void 0) {
-          // The identifier is always "@VoidLatency" or "@VoidLatency_<suffix>".
-          // Admin may type either the bare suffix ("secret") or the full form
-          // ("@VoidLatency_secret"); both normalize to @VoidLatency_secret.
-          let raw = String(path).trim().replace(/^[/@]+/, "");
-          if (raw.startsWith("VoidLatency_")) raw = raw.slice("VoidLatency_".length);
-          else if (raw === "VoidLatency") raw = "";
-          const suffix = raw.replace(/[^A-Za-z0-9_-]/g, "");
-          const id = suffix ? "@VoidLatency_" + suffix : DEFAULT_PATH_ID;
-          await DbService.setSetting(env.VL_DB, "vless_path", id);
-        }
-        if (reset_scheduler !== void 0) {
-          await DbService.setSetting(env.VL_DB, "reset_scheduler", reset_scheduler ? "1" : "0");
-        }
         return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
       }
       if (request.method === "GET") {
@@ -682,15 +528,11 @@ var Router = {
         const rowIata = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'proxy_location_iata'").first();
         const rowLen = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'frag_len'").first();
         const rowInt = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'frag_int'").first();
-        const pathId = await DbService.getSetting(env.VL_DB, "vless_path", DEFAULT_PATH_ID);
-        const resetSched = await DbService.getSetting(env.VL_DB, "reset_scheduler", "0");
         return new Response(JSON.stringify({
           proxy_ip: rowIp ? rowIp.value : "proxyip.cmliussss.net",
           iata: rowIata ? rowIata.value : "",
           frag_len: rowLen ? rowLen.value : "20-30",
-          frag_int: rowInt ? rowInt.value : "1-2",
-          path: pathId,
-          reset_scheduler: resetSched === "1"
+          frag_int: rowInt ? rowInt.value : "1-2"
         }), { headers: { "Content-Type": "application/json" } });
       }
     }
@@ -959,14 +801,14 @@ var Router = {
           return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
         }
         const host = url.hostname;
-        const config = await SubscriptionService.generateText(user, host, env);
+        const config = await SubscriptionService.generateText(user, host);
         return new Response(JSON.stringify({
           success: true,
           username: user.username,
           config: config,
           links: {
-            sub: `${url.origin}/sub/${encodeURIComponent(username)}`,
-            json: `${url.origin}/sub/${encodeURIComponent(username)}?format=json`,
+            text: `${url.origin}/feed/${encodeURIComponent(username)}`,
+            json: `${url.origin}/feed/json/${encodeURIComponent(username)}`,
             status: `${url.origin}/status/${encodeURIComponent(username)}`
           }
         }), {
@@ -976,7 +818,7 @@ var Router = {
         return new Response(JSON.stringify({ error: e.message }), { status: 500 });
       }
     }
-
+    
     // ============================================
     // USER RESET - Reset user traffic
     // ============================================
@@ -987,10 +829,8 @@ var Router = {
         return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
       }
       try {
-        await env.VL_DB.prepare("UPDATE users SET used_gb = 0, used_up_gb = 0, used_down_gb = 0 WHERE username = ?").bind(username).run();
+        await env.VL_DB.prepare("UPDATE users SET used_gb = 0 WHERE username = ?").bind(username).run();
         GLOBAL_TRAFFIC_CACHE.delete(username);
-        GLOBAL_UP_CACHE.delete(username);
-        GLOBAL_DOWN_CACHE.delete(username);
         return new Response(JSON.stringify({ success: true }), {
           headers: { "Content-Type": "application/json" }
         });
@@ -1005,7 +845,8 @@ var Router = {
     if (url.pathname === "/api/users/reset-all" && request.method === "POST") {
       if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
       try {
-        await resetAllTraffic(env);
+        await env.VL_DB.prepare("UPDATE users SET used_gb = 0").run();
+        GLOBAL_TRAFFIC_CACHE.clear();
         return new Response(JSON.stringify({ success: true }), {
           headers: { "Content-Type": "application/json" }
         });
@@ -1089,19 +930,15 @@ var Router = {
     // SYSTEM INFO
     // ============================================
     if (url.pathname === "/api/system/info") {
-      const deployTime = parseInt(await DbService.getSetting(env.VL_DB, "deploy_time", String(Date.now())), 10);
-      const running = (await DbService.getSetting(env.VL_DB, "xray_running", "1")) === "1";
-      const startedAt = parseInt(await DbService.getSetting(env.VL_DB, "xray_started_at", String(deployTime)), 10);
-      const panelUptime = Math.max(0, Math.floor((Date.now() - deployTime) / 1000));
       return new Response(JSON.stringify({
         version: PANEL_VERSION,
         platform: "Cloudflare Workers",
         environment: "Production",
-        uptime: panelUptime,
+        uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000),
         theme: THEME,
         xray: {
-          running,
-          uptime: running ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0,
+          running: xrayStatus.running,
+          uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000),
           version: "v26.4.25",
           memory: "50.98 MB",
           threads: 14
@@ -1117,12 +954,11 @@ var Router = {
     if (url.pathname === "/api/health") {
       try {
         const dbCheck = await env.VL_DB.prepare("SELECT 1").first();
-        const deployTime = parseInt(await DbService.getSetting(env.VL_DB, "deploy_time", String(Date.now())), 10);
         return new Response(JSON.stringify({
           status: "healthy",
           database: dbCheck ? "connected" : "error",
           version: PANEL_VERSION,
-          uptime: Math.max(0, Math.floor((Date.now() - deployTime) / 1000)),
+          uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000),
           timestamp: new Date().toISOString()
         }), {
           headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
@@ -1301,8 +1137,8 @@ var Router = {
           success: true,
           username: username,
           links: {
-            sub: `${origin}/sub/${encodeURIComponent(username)}`,
-            json: `${origin}/sub/${encodeURIComponent(username)}?format=json`,
+            text: `${origin}/feed/${encodeURIComponent(username)}`,
+            json: `${origin}/feed/json/${encodeURIComponent(username)}`,
             status: `${origin}/status/${encodeURIComponent(username)}`,
             panel: `${origin}/panel`
           }
@@ -1341,12 +1177,11 @@ var Router = {
     // PANEL CONFIG - Get panel configuration
     // ============================================
     if (url.pathname === "/api/panel/config" && request.method === "GET") {
-      const running = (await DbService.getSetting(env.VL_DB, "xray_running", "1")) === "1";
       return new Response(JSON.stringify({
         version: PANEL_VERSION,
         theme: THEME,
         xray: {
-          running,
+          running: xrayStatus.running,
           version: "v26.4.25"
         },
         admin_count: ADMINS.length,
@@ -1459,21 +1294,7 @@ var DbService = {
       await db.prepare("ALTER TABLE users ADD COLUMN config_name TEXT").run();
     } catch (e) {}
     try {
-      await db.prepare("ALTER TABLE users ADD COLUMN used_up_gb REAL DEFAULT 0").run();
-    } catch (e) {}
-    try {
-      await db.prepare("ALTER TABLE users ADD COLUMN used_down_gb REAL DEFAULT 0").run();
-    } catch (e) {}
-    try {
       await db.prepare("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)").run();
-    } catch (e) {}
-    // Seed defaults that must exist for the panel to behave (only inserted once).
-    try {
-      const now = String(Date.now());
-      await db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('deploy_time', ?)").bind(now).run();
-      await db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('xray_running', '1')").run();
-      await db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('vless_path', ?)").bind(DEFAULT_PATH_ID).run();
-      await db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('reset_scheduler', '0')").run();
     } catch (e) {}
     try {
       await db.prepare(`
@@ -1486,17 +1307,6 @@ var DbService = {
       `).run();
     } catch (e) {}
     schemaEnsured = true;
-  },
-  async getSetting(db, key, fallback = null) {
-    try {
-      const row = await db.prepare("SELECT value FROM settings WHERE key = ?").bind(key).first();
-      return row && row.value !== null && row.value !== void 0 ? row.value : fallback;
-    } catch (e) {
-      return fallback;
-    }
-  },
-  async setSetting(db, key, value) {
-    await db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").bind(key, String(value)).run();
   },
   async getPanelPassword(db) {
     if (cachedPanelPassword !== null) return cachedPanelPassword;
@@ -1557,9 +1367,7 @@ var SubscriptionService = {
       const rowInt = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'frag_int'").first();
       if (rowInt && rowInt.value) fragInt = rowInt.value;
     } catch (e) {}
-    const pathId = await DbService.getSetting(env.VL_DB, "vless_path", DEFAULT_PATH_ID);
-    const wsPath = pathIdToWsPath(pathId);
-
+    
     const configArray = [];
     const now = new Date();
     const created = new Date(user.created_at);
@@ -1581,12 +1389,12 @@ var SubscriptionService = {
     
     // کانفیگ اطلاعات 1: تاریخ انقضا
     const remark1 = "⏳ " + user.username.toUpperCase() + " | 📅 Exp: " + expiryDateStr + " | 🔥 " + daysLeft + " Days Left";
-    const configObj1 = this.buildConfig(user, firstIp, firstPort, tlsVal, host, fp, fragLen, fragInt, remark1, wsPath);
+    const configObj1 = this.buildConfig(user, firstIp, firstPort, tlsVal, host, fp, fragLen, fragInt, remark1);
     configArray.push(configObj1);
-
+    
     // کانفیگ اطلاعات 2: حجم مصرفی
     const remark2 = "📊 " + user.username.toUpperCase() + " | 💾 " + totalFormatted + " Total | ⚡ " + usedFormatted + " Used";
-    const configObj2 = this.buildConfig(user, firstIp, firstPort, tlsVal, host, fp, fragLen, fragInt, remark2, wsPath);
+    const configObj2 = this.buildConfig(user, firstIp, firstPort, tlsVal, host, fp, fragLen, fragInt, remark2);
     configArray.push(configObj2);
     
     // کانفیگ‌های باقی‌مده برای تمام آیپی‌ها و پورت‌ها با اسم کاربر
@@ -1595,7 +1403,7 @@ var SubscriptionService = {
         const isTlsPortLoop = ["443", "2053", "2083", "2087", "2096", "8443"].includes(portStr);
         const tlsValLoop = isTlsPortLoop ? "tls" : "none";
         const remark3 = configName;
-        const configObj3 = this.buildConfig(user, ip, portStr, tlsValLoop, host, fp, fragLen, fragInt, remark3, wsPath);
+        const configObj3 = this.buildConfig(user, ip, portStr, tlsValLoop, host, fp, fragLen, fragInt, remark3);
         configArray.push(configObj3);
       });
     });
@@ -1604,15 +1412,12 @@ var SubscriptionService = {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-store",
-        "Profile-Update-Interval": "12",
-        "Profile-Title": "base64:" + btoa(unescape(encodeURIComponent("VoidLatency | " + user.username))),
-        "Subscription-Userinfo": SubscriptionService.buildUserInfoHeader(user, expiryDate)
+        "Cache-Control": "no-store"
       }
     });
   },
-
-  buildConfig(user, ip, portStr, tlsVal, host, fp, fragLen, fragInt, remark, wsPath = "/") {
+  
+  buildConfig(user, ip, portStr, tlsVal, host, fp, fragLen, fragInt, remark) {
     const configObj = {
       remarks: remark,
       version: { min: "25.10.15" },
@@ -1654,7 +1459,7 @@ var SubscriptionService = {
           },
           ["streamSettings"]: {
             network: "ws",
-            ["wsSettings"]: { host, path: wsPath },
+            ["wsSettings"]: { host, path: "/" },
             security: tlsVal,
             sockopt: { ["dialerProxy"]: "fragment" }
           },
@@ -1702,7 +1507,7 @@ var SubscriptionService = {
     return configObj;
   },
   
-  async generateText(user, host, env) {
+  async generateText(user, host) {
     let ips = [host];
     if (user.ips) {
       const parsedIps = user.ips.split("\n").map((ip) => ip.trim()).filter((ip) => ip.length > 0);
@@ -1710,13 +1515,7 @@ var SubscriptionService = {
     }
     const ports = String(user.port || "443").split(",").map((p) => p.trim()).filter((p) => p.length > 0);
     const fp = user.fingerprint || "chrome";
-    let pathId = DEFAULT_PATH_ID;
-    if (env) {
-      try { pathId = await DbService.getSetting(env.VL_DB, "vless_path", DEFAULT_PATH_ID); } catch (e) {}
-    }
-    const wsPath = pathIdToWsPath(pathId);
-    const encPath = encodeURIComponent(wsPath);
-
+    
     const now = new Date();
     const created = new Date(user.created_at);
     const expiryDays = user.expiry_days || 30;
@@ -1729,33 +1528,33 @@ var SubscriptionService = {
     const configName = user.config_name || user.username;
     const usedFormatted = usedGB >= 1 ? usedGB.toFixed(1) + "GB" : (usedGB * 1024).toFixed(0) + "MB";
     const totalFormatted = totalGB >= 1 ? totalGB + "GB" : "Unlimited";
-
+    
     const links = [];
-
+    
     // فقط دو کانفیگ اطلاعاتی برای اولین IP و پورت
     const firstIp = ips[0] || host;
     const firstPort = ports[0] || "443";
     const isTlsPort = ["443", "2053", "2083", "2087", "2096", "8443"].includes(firstPort);
     const tlsVal = isTlsPort ? "tls" : "none";
-
+    
     // کانفیگ اطلاعات 1: تاریخ انقضا
     const remark1 = "⏳ " + user.username.toUpperCase() + " | 📅 Exp: " + expiryDateStr + " | 🔥 " + daysLeft + " Days Left";
-    links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + firstIp + ":" + firstPort + "?path=" + encPath + "&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark1));
-
+    links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + firstIp + ":" + firstPort + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark1));
+    
     // کانفیگ اطلاعات 2: حجم مصرفی
     const remark2 = "📊 " + user.username.toUpperCase() + " | 💾 " + totalFormatted + " Total | ⚡ " + usedFormatted + " Used";
-    links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + firstIp + ":" + firstPort + "?path=" + encPath + "&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark2));
-
+    links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + firstIp + ":" + firstPort + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark2));
+    
     // کانفیگ‌های باقی‌مده برای تمام آیپی‌ها و پورت‌ها با اسم کاربر
     ips.forEach((ip) => {
       ports.forEach((portStr) => {
         const isTlsPortLoop = ["443", "2053", "2083", "2087", "2096", "8443"].includes(portStr);
         const tlsValLoop = isTlsPortLoop ? "tls" : "none";
         const remark3 = configName;
-        links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + ip + ":" + portStr + "?path=" + encPath + "&security=" + tlsValLoop + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark3));
+        links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + ip + ":" + portStr + "?path=%2F&security=" + tlsValLoop + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark3));
       });
     });
-
+    
     const header = [
       "# ==========================================",
       "# VoidLatency Subscription Feed",
@@ -1765,49 +1564,22 @@ var SubscriptionService = {
       "# ==========================================",
       ""
     ].join("\n");
-
+    
     const plainContent = header + links.join("\n");
     const subContent = btoa(unescape(encodeURIComponent(plainContent)));
     return new Response(subContent, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-store",
-        "Profile-Update-Interval": "12",
-        "Profile-Title": "base64:" + btoa(unescape(encodeURIComponent("VoidLatency | " + user.username))),
-        "Subscription-Userinfo": SubscriptionService.buildUserInfoHeader(user, expiryDate)
+        "Cache-Control": "no-store"
       }
     });
-  },
-
-  // v2rayNG / v2Box / Streisand read this header to display usage + expiry.
-  // Format: upload=<bytes>; download=<bytes>; total=<bytes>; expire=<unix-seconds>
-  buildUserInfoHeader(user, expiryDate) {
-    const GB = 1024 * 1024 * 1024;
-    let upBytes = Math.round((user.used_up_gb || 0) * GB);
-    let downBytes = Math.round((user.used_down_gb || 0) * GB);
-    const totalUsedBytes = Math.round((user.used_gb || 0) * GB);
-    // Legacy users may have total usage but no directional split yet; approximate
-    // with a typical 10/90 upload/download asymmetry so the app still shows usage.
-    if (upBytes + downBytes === 0 && totalUsedBytes > 0) {
-      upBytes = Math.round(totalUsedBytes * 0.1);
-      downBytes = totalUsedBytes - upBytes;
-    }
-    const totalBytes = user.limit_gb ? Math.round(user.limit_gb * GB) : 0;
-    const expireUnix = expiryDate && !isNaN(expiryDate.getTime()) ? Math.floor(expiryDate.getTime() / 1000) : 0;
-    return "upload=" + upBytes + "; download=" + downBytes + "; total=" + totalBytes + "; expire=" + expireUnix;
   }
 };
 
 // ============================================
 // TRAFFIC MANAGEMENT - REAL TRAFFIC
 // ============================================
-async function resetAllTraffic(env) {
-  await env.VL_DB.prepare("UPDATE users SET used_gb = 0, used_up_gb = 0, used_down_gb = 0").run();
-  GLOBAL_TRAFFIC_CACHE.clear();
-  GLOBAL_UP_CACHE.clear();
-  GLOBAL_DOWN_CACHE.clear();
-}
 async function flushExpiredTraffic(env) {
   const now = Date.now();
   for (const [uname, cachedBytes] of GLOBAL_TRAFFIC_CACHE.entries()) {
@@ -1844,36 +1616,8 @@ async function handleVLESS(env, storedData = null, ctx = null) {
   let tickCount = 0;
   let validUUID = null;
   
-  const DIRECTION_THRESHOLD = 50 * 1024 * 1024;
-  // Commit a per-direction accumulator to used_up_gb / used_down_gb. Limit
-  // enforcement stays on the total-usage path below, so this stays side-effect
-  // free apart from the directional column it owns.
-  function commitDirectional(cache, column, bytes) {
-    let current = (cache.get(username) || 0) + bytes;
-    if (current >= DIRECTION_THRESHOLD) {
-      const chunks = Math.floor(current / DIRECTION_THRESHOLD);
-      const bytesToCommit = chunks * DIRECTION_THRESHOLD;
-      const deltaGb = bytesToCommit / (1024 * 1024 * 1024);
-      cache.set(username, current - bytesToCommit);
-      const writeTask = async () => {
-        try {
-          await env.VL_DB.prepare("UPDATE users SET " + column + " = COALESCE(" + column + ", 0) + ? WHERE username = ?").bind(deltaGb, username).run();
-        } catch (e) {
-          cache.set(username, (cache.get(username) || 0) + bytesToCommit);
-        }
-      };
-      if (ctx) ctx.waitUntil(writeTask());
-      else writeTask();
-    } else {
-      cache.set(username, current);
-    }
-  }
-
-  // direction: "up" = client -> remote (upload), "down" = remote -> client (download)
-  function addBytes(bytes, direction) {
+  function addBytes(bytes) {
     if (bytes <= 0 || !username) return;
-    if (direction === "up") commitDirectional(GLOBAL_UP_CACHE, "used_up_gb", bytes);
-    else if (direction === "down") commitDirectional(GLOBAL_DOWN_CACHE, "used_down_gb", bytes);
     let current = GLOBAL_TRAFFIC_CACHE.get(username) || 0;
     current += bytes;
     GLOBAL_LAST_ACTIVE_WRITE.set(username, Date.now());
@@ -2038,7 +1782,7 @@ async function handleVLESS(env, storedData = null, ctx = null) {
   
   const processWsMessage = async (chunk) => {
     const bytes = chunk.byteLength || 0;
-    await addBytes(bytes, "up");
+    await addBytes(bytes);
     if (isDnsQuery) {
       await forwardVlessUDP(chunk, serverSock, null);
       return;
@@ -2139,7 +1883,7 @@ async function handleVLESS(env, storedData = null, ctx = null) {
             remoteConnWrapper.socket = s;
             s.closed.catch(() => {}).finally(() => closeSocketQuietly(serverSock));
             connectStreams(s, serverSock, respHeader, null, (b) => {
-              addBytes(b, "down");
+              addBytes(b);
             });
           })();
           remoteConnWrapper.connectingPromise = task;
@@ -3270,12 +3014,6 @@ var HTML_TEMPLATES = {
                     </svg>
                     Logs
                 </a>
-                <a href="#" onclick="showPage('apidocs')" class="sidebar-link flex items-center gap-3 text-sm font-medium text-zinc-400 hover:text-white transition" data-page="apidocs">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
-                    </svg>
-                    API Docs
-                </a>
                 <a href="#" onclick="showPage('admins')" class="sidebar-link flex items-center gap-3 text-sm font-medium text-zinc-400 hover:text-white transition" data-page="admins">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
@@ -3330,7 +3068,7 @@ var HTML_TEMPLATES = {
                 <div class="flex items-center gap-2 sm:gap-3">
                     <span class="text-xs text-zinc-500 hidden sm:inline">v2.9.4</span>
                     <span class="w-px h-6 bg-zinc-800 hidden sm:block"></span>
-                    <span id="header-xray-status" class="text-xs text-emerald-400 flex items-center gap-1.5">
+                    <span class="text-xs text-emerald-400 flex items-center gap-1.5">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                         <span class="hidden xs:inline">Xray Running</span>
                     </span>
@@ -3357,75 +3095,46 @@ var HTML_TEMPLATES = {
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
                             <p class="text-[10px] sm:text-xs text-zinc-400 font-medium">CPU</p>
-                            <span class="text-[10px] sm:text-xs text-indigo-400" id="sys-cpu-cores">48 Cores</span>
+                            <span class="text-[10px] sm:text-xs text-indigo-400">48 Cores</span>
                         </div>
-                        <p class="text-base sm:text-lg font-bold text-white mt-1" id="sys-cpu-val">12.5%</p>
+                        <p class="text-base sm:text-lg font-bold text-white mt-1">12.5%</p>
                         <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-2">
-                            <div class="bg-indigo-500 h-1.5 rounded-full transition-all" id="sys-cpu-bar" style="width: 12.5%"></div>
+                            <div class="bg-indigo-500 h-1.5 rounded-full transition-all" style="width: 12.5%"></div>
                         </div>
-                        <p class="text-[8px] sm:text-[10px] text-zinc-500 mt-1" id="sys-load-line">12.5 | 11.4 | 11.6</p>
+                        <p class="text-[8px] sm:text-[10px] text-zinc-500 mt-1">12.5 | 11.4 | 11.6</p>
                     </div>
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
                             <p class="text-[10px] sm:text-xs text-zinc-400 font-medium">RAM</p>
-                            <span class="text-[10px] sm:text-xs text-emerald-400" id="sys-ram-pct">49.4%</span>
+                            <span class="text-[10px] sm:text-xs text-emerald-400">49.4%</span>
                         </div>
-                        <p class="text-base sm:text-lg font-bold text-white" id="sys-ram-val">159.30 GB</p>
-                        <p class="text-[8px] sm:text-xs text-zinc-500" id="sys-ram-total">/ 322.69 GB</p>
+                        <p class="text-base sm:text-lg font-bold text-white">159.30 GB</p>
+                        <p class="text-[8px] sm:text-xs text-zinc-500">/ 322.69 GB</p>
                         <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-1">
-                            <div class="bg-emerald-500 h-1.5 rounded-full transition-all" id="sys-ram-bar" style="width: 49.4%"></div>
+                            <div class="bg-emerald-500 h-1.5 rounded-full transition-all" style="width: 49.4%"></div>
                         </div>
                     </div>
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
                             <p class="text-[10px] sm:text-xs text-zinc-400 font-medium">Swap</p>
-                            <span class="text-[10px] sm:text-xs text-yellow-400" id="sys-swap-pct">0.6%</span>
+                            <span class="text-[10px] sm:text-xs text-yellow-400">0.6%</span>
                         </div>
-                        <p class="text-base sm:text-lg font-bold text-white" id="sys-swap-val">1.39 GB</p>
-                        <p class="text-[8px] sm:text-xs text-zinc-500" id="sys-swap-total">/ 223.56 GB</p>
+                        <p class="text-base sm:text-lg font-bold text-white">1.39 GB</p>
+                        <p class="text-[8px] sm:text-xs text-zinc-500">/ 223.56 GB</p>
                         <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-1">
-                            <div class="bg-yellow-500 h-1.5 rounded-full transition-all" id="sys-swap-bar" style="width: 0.6%"></div>
+                            <div class="bg-yellow-500 h-1.5 rounded-full transition-all" style="width: 0.6%"></div>
                         </div>
                     </div>
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
                             <p class="text-[10px] sm:text-xs text-zinc-400 font-medium">Storage</p>
-                            <span class="text-[10px] sm:text-xs text-blue-400" id="sys-storage-pct">28.6%</span>
+                            <span class="text-[10px] sm:text-xs text-blue-400">28.6%</span>
                         </div>
-                        <p class="text-base sm:text-lg font-bold text-white" id="sys-storage-val">818.93 GB</p>
-                        <p class="text-[8px] sm:text-xs text-zinc-500" id="sys-storage-total">/ 2.86 TB</p>
+                        <p class="text-base sm:text-lg font-bold text-white">818.93 GB</p>
+                        <p class="text-[8px] sm:text-xs text-zinc-500">/ 2.86 TB</p>
                         <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-1">
-                            <div class="bg-blue-500 h-1.5 rounded-full transition-all" id="sys-storage-bar" style="width: 28.6%"></div>
+                            <div class="bg-blue-500 h-1.5 rounded-full transition-all" style="width: 28.6%"></div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Live network / connections row -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6 stats-grid">
-                    <div class="system-stat">
-                        <p class="text-[10px] sm:text-xs text-zinc-400 font-medium mb-1">Overall Speed</p>
-                        <div class="flex items-center gap-1 text-emerald-400 text-sm font-bold">
-                            <span>↓</span><span id="net-down">0.0 KB/s</span>
-                        </div>
-                        <div class="flex items-center gap-1 text-indigo-400 text-sm font-bold mt-0.5">
-                            <span>↑</span><span id="net-up">0.0 KB/s</span>
-                        </div>
-                    </div>
-                    <div class="system-stat">
-                        <p class="text-[10px] sm:text-xs text-zinc-400 font-medium mb-1">Connections</p>
-                        <p class="text-sm font-bold text-white">TCP: <span id="conn-tcp" class="text-emerald-400">0</span></p>
-                        <p class="text-sm font-bold text-white mt-0.5">UDP: <span id="conn-udp" class="text-zinc-500">0</span></p>
-                    </div>
-                    <div class="system-stat">
-                        <p class="text-[10px] sm:text-xs text-zinc-400 font-medium mb-1">Data Sent / Received</p>
-                        <p class="text-sm font-bold text-white">↑ <span id="data-sent" class="text-indigo-400">0 GB</span></p>
-                        <p class="text-sm font-bold text-white mt-0.5">↓ <span id="data-received" class="text-emerald-400">0 GB</span></p>
-                    </div>
-                    <div class="system-stat">
-                        <p class="text-[10px] sm:text-xs text-zinc-400 font-medium mb-1">IP Addresses</p>
-                        <p class="text-xs font-mono text-blue-400 truncate" id="ip-primary">-</p>
-                        <p class="text-xs font-mono text-zinc-500 truncate mt-0.5" id="ip-secondary">-</p>
-                        <p class="text-[10px] text-zinc-600 mt-0.5" id="ip-host">-</p>
                     </div>
                 </div>
 
@@ -3434,11 +3143,11 @@ var HTML_TEMPLATES = {
                     <div class="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
                         <div class="flex items-center gap-3 sm:gap-4 flex-wrap">
                             <div class="flex items-center gap-2">
-                                <span id="xray-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                                 <span class="text-sm font-bold text-white">Xray</span>
                             </div>
                             <span class="text-xs text-zinc-400 bg-zinc-800/50 px-2 py-1 rounded">v26.4.25</span>
-                            <span id="xray-pill" class="text-xs text-emerald-400 bg-emerald-500/10 px-2 sm:px-3 py-1 rounded-full border border-emerald-500/20">● Running</span>
+                            <span class="text-xs text-emerald-400 bg-emerald-500/10 px-2 sm:px-3 py-1 rounded-full border border-emerald-500/20">● Running</span>
                         </div>
                         <div class="flex items-center gap-1 sm:gap-2">
                             <button onclick="controlXray('stop')" class="btn-xray text-xs sm:text-sm bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 px-2 sm:px-4">Stop</button>
@@ -3448,15 +3157,10 @@ var HTML_TEMPLATES = {
                         <div class="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-zinc-400 flex-wrap">
                             <span>Uptime: <span id="xray-uptime" class="text-white font-medium">3m</span></span>
                             <span class="hidden xs:inline">|</span>
-                            <span class="hidden xs:inline">RAM: <span id="xray-ram" class="text-white font-medium">50.98 MB</span></span>
+                            <span class="hidden xs:inline">RAM: <span class="text-white font-medium">50.98 MB</span></span>
                             <span class="hidden xs:inline">|</span>
-                            <span class="hidden xs:inline">Threads: <span id="xray-threads" class="text-white font-medium">14</span></span>
+                            <span class="hidden xs:inline">Threads: <span class="text-white font-medium">14</span></span>
                         </div>
-                    </div>
-                    <div class="mt-3 pt-3 border-t border-zinc-800/30 text-[10px] sm:text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span>Uptime: <span id="panel-uptime" class="text-white font-medium">-</span></span>
-                        <span class="hidden xs:inline">|</span>
-                        <span>Load: <span id="panel-load" class="text-white font-medium font-mono">0.00 | 0.00 | 0.00</span></span>
                     </div>
                 </div>
 
@@ -3623,22 +3327,6 @@ var HTML_TEMPLATES = {
                                 <input type="text" id="frag-interval" placeholder="1-2" class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition text-center font-mono" dir="ltr">
                             </div>
                         </div>
-                        <div>
-                            <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Subscription Path</label>
-                            <input type="text" id="path-input" placeholder="@VoidLatency" class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition font-mono" dir="ltr">
-                            <p class="text-[10px] text-zinc-500 mt-1.5">Identifier used as the VLESS WebSocket path (e.g. <span class="font-mono">@VoidLatency_X</span>). Changing it updates every user's config on their next subscription refresh.</p>
-                        </div>
-                        <div class="border-t border-zinc-800/30 pt-4">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="text-sm font-semibold text-white">Daily Traffic Reset</h4>
-                                    <p class="text-[10px] text-zinc-500 mt-0.5">Automatically reset all users' traffic every day at 03:30 (Tehran time).</p>
-                                </div>
-                                <button type="button" id="reset-scheduler-toggle" onclick="toggleResetScheduler()" role="switch" aria-checked="false" class="relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full bg-zinc-700 transition">
-                                    <span id="reset-scheduler-knob" class="inline-block h-4 w-4 transform rounded-full bg-white transition translate-x-1"></span>
-                                </button>
-                            </div>
-                        </div>
                         <div class="border-t border-zinc-800/30 pt-4">
                             <h4 class="text-sm font-semibold text-white mb-3">Change Panel Password</h4>
                             <div class="space-y-3">
@@ -3683,27 +3371,6 @@ var HTML_TEMPLATES = {
                         <div class="text-zinc-500">● API endpoints ready</div>
                         <div class="text-indigo-400">● Database connected</div>
                     </div>
-                </div>
-            </div>
-
-            <!-- ==========================================
-            PAGE: API DOCS
-            ========================================== -->
-            <div id="page-apidocs" class="page-section">
-                <div class="glass rounded-2xl p-4 sm:p-6">
-                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        <div>
-                            <h2 class="text-lg font-bold text-white">API Documentation</h2>
-                            <p class="text-xs text-zinc-400">All endpoints exposed by this panel. Authenticated routes require a valid <span class="font-mono">panel_session</span> cookie.</p>
-                        </div>
-                        <div class="flex-1 min-w-[180px] max-w-xs relative">
-                            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                            </svg>
-                            <input type="text" id="apidocs-search" oninput="renderApiDocs()" placeholder="Filter endpoints..." class="w-full pl-9 pr-3 py-2 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition bg-[rgba(255,255,255,0.05)] border border-zinc-800/50">
-                        </div>
-                    </div>
-                    <div id="apidocs-container" class="space-y-6"></div>
                 </div>
             </div>
 
@@ -3834,7 +3501,6 @@ var HTML_TEMPLATES = {
         // ============================================
         window.globalFragLen = "20-30";
         window.globalFragInt = "1-2";
-        window.globalPath = "@VoidLatency";
         const tlsPorts = ['443', '2053', '2083', '2087', '2096', '8443'];
         const nonTlsPorts = ['80', '8080', '8880', '2052', '2082', '2086', '2095'];
         let isEditMode = false;
@@ -3918,12 +3584,10 @@ var HTML_TEMPLATES = {
                 users: ['Users', 'Manage your VLESS users'],
                 settings: ['Panel Settings', 'Configure panel preferences'],
                 logs: ['System Logs', 'Real-time activity logs'],
-                apidocs: ['API Documentation', 'Every endpoint, grouped by category'],
                 admins: ['Admin Management', 'Add or remove administrators']
             };
             document.getElementById('page-title').innerText = titles[page][0];
             document.getElementById('page-subtitle').innerText = titles[page][1];
-            if (page === 'apidocs') renderApiDocs();
             
             // بستن خودکار منو در موبایل بعد از کلیک
             if (window.innerWidth < 1024) {
@@ -4133,277 +3797,15 @@ var HTML_TEMPLATES = {
             try {
                 var res = await fetch('/api/xray/status');
                 var data = await res.json();
-                applyXrayRunningState(data.running);
                 if (data.running) {
-                    document.getElementById('xray-uptime').innerText = formatUptime(data.uptime);
+                    var uptime = data.uptime;
+                    var hours = Math.floor(uptime / 3600);
+                    var minutes = Math.floor((uptime % 3600) / 60);
+                    document.getElementById('xray-uptime').innerText = hours > 0 ? hours + 'h ' + minutes + 'm' : minutes + 'm';
                 } else {
                     document.getElementById('xray-uptime').innerText = 'Stopped';
                 }
             } catch (e) {}
-        }
-
-        function applyXrayRunningState(running) {
-            window.xrayRunning = running;
-            var pill = document.getElementById('xray-pill');
-            var dot = document.getElementById('xray-dot');
-            var headerPill = document.getElementById('header-xray-status');
-            if (running) {
-                if (pill) { pill.className = 'text-xs text-emerald-400 bg-emerald-500/10 px-2 sm:px-3 py-1 rounded-full border border-emerald-500/20'; pill.innerText = '● Running'; }
-                if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
-                if (headerPill) { headerPill.className = 'text-xs text-emerald-400 flex items-center gap-1.5'; headerPill.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span><span class="hidden xs:inline">Xray Running</span>'; }
-            } else {
-                if (pill) { pill.className = 'text-xs text-red-400 bg-red-500/10 px-2 sm:px-3 py-1 rounded-full border border-red-500/20'; pill.innerText = '● Stopped'; }
-                if (dot) dot.className = 'w-2 h-2 rounded-full bg-red-400';
-                if (headerPill) { headerPill.className = 'text-xs text-red-400 flex items-center gap-1.5'; headerPill.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-400"></span><span class="hidden xs:inline">Xray Stopped</span>'; }
-            }
-        }
-
-        // ============================================
-        // LIVE SYSTEM SIMULATION
-        // No real OS access exists on Workers, so CPU/RAM/Swap/Storage/Load/Speed
-        // are simulated with a small per-second random walk within believable
-        // bands. Everything else on this row (TCP, data sent/received, uptime,
-        // IPs) comes from the /api/system/stats endpoint and is real.
-        // ============================================
-        var SIM = null;
-
-        function rw(value, step, min, max) {
-            var next = value + (Math.random() * 2 - 1) * step;
-            if (next < min) next = min + (min - next) * 0.4;
-            if (next > max) next = max - (next - max) * 0.4;
-            return Math.min(max, Math.max(min, next));
-        }
-
-        function formatUptime(sec) {
-            sec = Math.max(0, Math.floor(sec || 0));
-            var d = Math.floor(sec / 86400);
-            var h = Math.floor((sec % 86400) / 3600);
-            var m = Math.floor((sec % 3600) / 60);
-            var s = sec % 60;
-            if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
-            if (h > 0) return h + 'h ' + m + 'm';
-            if (m > 0) return m + 'm ' + s + 's';
-            return s + 's';
-        }
-
-        function formatSpeed(kbps) {
-            if (kbps >= 1024) return (kbps / 1024).toFixed(2) + ' MB/s';
-            return kbps.toFixed(1) + ' KB/s';
-        }
-
-        function formatGb(gb) {
-            gb = gb || 0;
-            if (gb >= 1024) return (gb / 1024).toFixed(2) + ' TB';
-            if (gb < 1) return (gb * 1024).toFixed(0) + ' MB';
-            return gb.toFixed(2) + ' GB';
-        }
-
-        function initSim(base) {
-            SIM = {
-                cores: (base && base.cpu && base.cpu.cores) || 48,
-                cpu: (base && base.cpu && base.cpu.load && base.cpu.load[0]) || 12.5,
-                ramUsed: (base && base.ram && base.ram.used) || 159.30,
-                ramTotal: (base && base.ram && base.ram.total) || 322.69,
-                swapUsed: (base && base.swap && base.swap.used) || 1.39,
-                swapTotal: (base && base.swap && base.swap.total) || 223.56,
-                storageUsed: (base && base.storage && base.storage.used) || 818.93,
-                storageTotal: (base && base.storage && base.storage.total) || 2867.20,
-                speedDown: 480,
-                speedUp: 120,
-                xrayRam: 50.98,
-                xrayThreads: 14
-            };
-        }
-
-        function setText(id, txt) { var el = document.getElementById(id); if (el) el.innerText = txt; }
-        function setWidth(id, pct) { var el = document.getElementById(id); if (el) el.style.width = Math.max(0, Math.min(100, pct)) + '%'; }
-
-        function simTick() {
-            if (!SIM) return;
-            var running = window.xrayRunning !== false;
-            // CPU drifts; load numbers loosely track CPU so it doesn't look like noise.
-            SIM.cpu = rw(SIM.cpu, 2.2, 3, 55);
-            var cpu = SIM.cpu;
-            setText('sys-cpu-val', cpu.toFixed(1) + '%');
-            setWidth('sys-cpu-bar', cpu);
-            var l1 = cpu * (0.95 + Math.random() * 0.05);
-            var l2 = cpu * (0.88 + Math.random() * 0.05);
-            var l3 = cpu * (0.90 + Math.random() * 0.05);
-            setText('sys-load-line', l1.toFixed(1) + ' | ' + l2.toFixed(1) + ' | ' + l3.toFixed(1));
-            setText('sys-cpu-cores', SIM.cores + ' Cores');
-
-            // Unix-style loadavg for the footer, correlated to CPU and core count.
-            var la1 = cpu / 100 * SIM.cores / 16;
-            setText('panel-load', la1.toFixed(2) + ' | ' + (la1 * 0.34).toFixed(2) + ' | ' + (la1 * 0.27).toFixed(2));
-
-            SIM.ramUsed = rw(SIM.ramUsed, SIM.ramTotal * 0.008, SIM.ramTotal * 0.3, SIM.ramTotal * 0.9);
-            var ramPct = SIM.ramUsed / SIM.ramTotal * 100;
-            setText('sys-ram-val', SIM.ramUsed.toFixed(2) + ' GB');
-            setText('sys-ram-total', '/ ' + SIM.ramTotal.toFixed(2) + ' GB');
-            setText('sys-ram-pct', ramPct.toFixed(1) + '%');
-            setWidth('sys-ram-bar', ramPct);
-
-            SIM.swapUsed = rw(SIM.swapUsed, SIM.swapTotal * 0.002, 0, SIM.swapTotal * 0.15);
-            var swapPct = SIM.swapUsed / SIM.swapTotal * 100;
-            setText('sys-swap-val', SIM.swapUsed.toFixed(2) + ' GB');
-            setText('sys-swap-total', '/ ' + SIM.swapTotal.toFixed(2) + ' GB');
-            setText('sys-swap-pct', swapPct.toFixed(1) + '%');
-            setWidth('sys-swap-bar', swapPct);
-
-            // Storage moves very slowly.
-            SIM.storageUsed = rw(SIM.storageUsed, 0.15, SIM.storageTotal * 0.2, SIM.storageTotal * 0.6);
-            var storagePct = SIM.storageUsed / SIM.storageTotal * 100;
-            setText('sys-storage-val', SIM.storageUsed.toFixed(2) + ' GB');
-            setText('sys-storage-total', '/ ' + (SIM.storageTotal / 1024).toFixed(2) + ' TB');
-            setText('sys-storage-pct', storagePct.toFixed(1) + '%');
-            setWidth('sys-storage-bar', storagePct);
-
-            // Overall speed. Goes to ~0 when Xray is stopped.
-            if (running) {
-                SIM.speedDown = rw(SIM.speedDown, 260, 20, 8200);
-                SIM.speedUp = rw(SIM.speedUp, 90, 5, 1600);
-            } else {
-                SIM.speedDown = rw(SIM.speedDown, 40, 0, 40);
-                SIM.speedUp = rw(SIM.speedUp, 20, 0, 20);
-            }
-            setText('net-down', formatSpeed(SIM.speedDown));
-            setText('net-up', formatSpeed(SIM.speedUp));
-
-            // Xray card believable drift.
-            SIM.xrayRam = rw(SIM.xrayRam, 0.6, 42, 68);
-            setText('xray-ram', SIM.xrayRam.toFixed(2) + ' MB');
-            if (Math.random() < 0.1) {
-                SIM.xrayThreads = Math.max(10, Math.min(20, SIM.xrayThreads + (Math.random() < 0.5 ? -1 : 1)));
-                setText('xray-threads', String(SIM.xrayThreads));
-            }
-        }
-
-        async function pollSystemStats() {
-            try {
-                var res = await fetch('/api/system/stats');
-                if (!res.ok) return;
-                var data = await res.json();
-                if (!SIM && data.base) initSim(data.base);
-                applyXrayRunningState(data.xray_running);
-                if (data.connections) {
-                    setText('conn-tcp', String(data.connections.tcp));
-                    setText('conn-udp', String(data.connections.udp));
-                }
-                if (data.data) {
-                    setText('data-sent', formatGb(data.data.sent_gb));
-                    setText('data-received', formatGb(data.data.received_gb));
-                }
-                setText('panel-uptime', formatUptime(data.panel_uptime));
-                if (data.ips && data.ips.length) {
-                    setText('ip-primary', data.ips[0]);
-                    setText('ip-secondary', data.ips[1] || '');
-                }
-                if (data.host) setText('ip-host', data.host);
-            } catch (e) {}
-        }
-
-        // ============================================
-        // API DOCUMENTATION
-        // ============================================
-        var API_DOCS = [
-            { category: 'Authentication & Panel', endpoints: [
-                { m: 'POST', p: '/api/login', auth: false, params: 'body: { username, password }', resp: '{ "success": true }  // also sets panel_session cookie' },
-                { m: 'POST', p: '/api/setup-password', auth: false, params: 'body: { password }  (min 4 chars, first-time only)', resp: '{ "success": true }' },
-                { m: 'POST', p: '/api/logout', auth: true, params: '-', resp: '{ "success": true }  // clears cookie' },
-                { m: 'GET', p: '/api/auth/verify', auth: false, params: '-', resp: '{ "authenticated": true, "role": "admin" }' },
-                { m: 'POST', p: '/api/change-password', auth: true, params: 'body: { current_password, new_password }', resp: '{ "success": true }' },
-                { m: 'GET', p: '/api/panel/config', auth: false, params: '-', resp: '{ "version", "theme", "xray": { running, version }, "admin_count", "user_count" }' }
-            ]},
-            { category: 'User Management', endpoints: [
-                { m: 'GET', p: '/api/users', auth: true, params: '-', resp: '{ "users": [ { username, uuid, limit_gb, used_gb, is_active, is_online, ... } ], "serverTime": 1700000000000 }' },
-                { m: 'POST', p: '/api/users', auth: true, params: 'body: { username, limit_gb, expiry_days, ips, tls, port, fingerprint, config_name }', resp: '{ "success": true }' },
-                { m: 'PUT', p: '/api/users/{username}', auth: true, params: 'body: { limit_gb, expiry_days, ips, tls, port, fingerprint, config_name }  or  { toggle_only: true }', resp: '{ "success": true }' },
-                { m: 'DELETE', p: '/api/users/{username}', auth: true, params: '-', resp: '{ "success": true }' },
-                { m: 'GET', p: '/api/users/{username}', auth: true, params: '-', resp: '{ "success": true, "user": { ... } }' },
-                { m: 'GET', p: '/api/users/stats/{username}', auth: true, params: '-', resp: '{ "used_gb", "left_gb", "used_percent", "days_left", "expiry_date", "is_expired" }' },
-                { m: 'GET', p: '/api/users/traffic/{username}', auth: true, params: '-', resp: '{ "used_gb", "limit_gb", "up_gb", "down_gb" }' },
-                { m: 'GET', p: '/api/users/check/{username}', auth: false, params: '-', resp: '{ "exists": true, "is_active": true, "is_expired": false, "limit_gb", "used_gb" }' },
-                { m: 'GET', p: '/api/users/config/{username}', auth: true, params: '-', resp: '{ "success": true, "links": { text, json, status } }' },
-                { m: 'GET', p: '/api/users/online/{username}', auth: false, params: '-', resp: '{ "online": true, "exists": true }' },
-                { m: 'POST', p: '/api/users/reset/{username}', auth: true, params: '-', resp: '{ "success": true }  // zeroes used/up/down' },
-                { m: 'POST', p: '/api/users/reset-all', auth: true, params: '-', resp: '{ "success": true }' },
-                { m: 'POST', p: '/api/users/extend/{username}', auth: true, params: 'body: { days }', resp: '{ "success": true, "new_expiry_days": 60 }' },
-                { m: 'POST', p: '/api/users/add-traffic/{username}', auth: true, params: 'body: { gb }', resp: '{ "success": true, "new_limit_gb": 120 }' },
-                { m: 'POST', p: '/api/users/rename', auth: true, params: 'body: { old_username, new_username }', resp: '{ "success": true }' },
-                { m: 'POST', p: '/api/users/bulk', auth: true, params: 'body: { users: [ { username, limit_gb, ... } ] }', resp: '{ "success": true, "results": [ { username, success } ] }' },
-                { m: 'GET', p: '/api/users/export', auth: true, params: '-', resp: '{ "success": true, "users": [ ... ] }' }
-            ]},
-            { category: 'Admins', endpoints: [
-                { m: 'GET', p: '/api/admins', auth: true, params: '-', resp: '{ "admins": [ { id, username, created_at } ] }' },
-                { m: 'POST', p: '/api/admins', auth: true, params: 'body: { username, password }  (min 4 chars)', resp: '{ "success": true }' },
-                { m: 'DELETE', p: '/api/admins', auth: true, params: 'body: { id }', resp: '{ "success": true }' },
-                { m: 'POST', p: '/api/admin/create', auth: true, params: 'body: { username, password }', resp: '{ "success": true }' }
-            ]},
-            { category: 'System & Settings', endpoints: [
-                { m: 'GET', p: '/api/system/stats', auth: false, params: '-', resp: '{ "base": { cpu, ram, swap, storage }, "connections": { tcp, udp }, "data": { sent_gb, received_gb }, "panel_uptime", "xray_running", "ips", "host" }' },
-                { m: 'GET', p: '/api/system/info', auth: false, params: '-', resp: '{ "version", "uptime", "xray": { running, uptime, memory, threads } }' },
-                { m: 'GET', p: '/api/health', auth: false, params: '-', resp: '{ "status": "healthy", "database": "connected", "uptime" }' },
-                { m: 'GET', p: '/api/stats/summary', auth: false, params: '-', resp: '{ "total_users", "active_users", "online_users", "total_traffic_gb" }' },
-                { m: 'POST', p: '/api/xray', auth: true, params: 'body: { action: "stop" | "start" | "restart" }', resp: '{ "success": true, "status": "stopped" }  // persisted; stopped rejects configs' },
-                { m: 'GET', p: '/api/xray/status', auth: false, params: '-', resp: '{ "running": true, "uptime", "memory", "threads" }' },
-                { m: 'GET', p: '/api/theme', auth: false, params: '-', resp: '{ "theme": "dark" }' },
-                { m: 'POST', p: '/api/theme', auth: true, params: 'body: { theme: "dark" | "light" }', resp: '{ "success": true, "theme": "dark" }' },
-                { m: 'GET', p: '/api/proxy-ip', auth: false, params: '-', resp: '{ "proxy_ip", "iata", "frag_len", "frag_int", "path", "reset_scheduler" }' },
-                { m: 'POST', p: '/api/proxy-ip', auth: true, params: 'body: { proxy_ip, iata, frag_len, frag_int, path, reset_scheduler }', resp: '{ "success": true }' },
-                { m: 'GET', p: '/api/update-check', auth: false, params: '-', resp: '{ "current_version", "latest_version", "update_available" }' },
-                { m: 'GET', p: '/api/logs', auth: true, params: '-', resp: '{ "logs": [ ... ] }' },
-                { m: 'GET', p: '/api/subscription/{username}', auth: false, params: '-', resp: '{ "sub", "json", "status" }  // share links' },
-                { m: 'GET', p: '/api/status/{username}', auth: false, params: '-', resp: '{ user status JSON }' }
-            ]},
-            { category: 'Subscription & Sharing (public)', endpoints: [
-                { m: 'GET', p: '/sub/{username}', auth: false, params: 'query: format=json (optional) — or send Accept: application/json', resp: 'The one subscription URL. Default: base64 config feed. ?format=json: JSON array of full Xray configs. Both responses carry Subscription-Userinfo: upload=..; download=..; total=..; expire=.. plus Profile-Title / Profile-Update-Interval, so v2rayNG / v2Box / Streisand import it directly and poll it for usage & expiry.' },
-                { m: 'GET', p: '/status/{username}', auth: false, params: '-', resp: 'HTML status page (usage, days remaining, active/expired)' },
-                { m: 'GET', p: '/locations', auth: false, params: '-', resp: 'Cloudflare edge locations JSON' }
-            ]}
-        ];
-
-        function methodBadge(m) {
-            var colors = {
-                GET: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-                POST: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-                PUT: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-                DELETE: 'bg-red-500/10 text-red-400 border-red-500/20'
-            };
-            return '<span class="text-[10px] font-bold px-2 py-0.5 rounded border ' + (colors[m] || 'bg-zinc-700 text-zinc-300') + '">' + m + '</span>';
-        }
-
-        function escHtml(s) {
-            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
-
-        function renderApiDocs() {
-            var container = document.getElementById('apidocs-container');
-            if (!container) return;
-            var q = (document.getElementById('apidocs-search').value || '').toLowerCase().trim();
-            var html = '';
-            API_DOCS.forEach(function(group) {
-                var eps = group.endpoints.filter(function(e) {
-                    if (!q) return true;
-                    return (e.p + ' ' + e.m + ' ' + group.category).toLowerCase().indexOf(q) !== -1;
-                });
-                if (eps.length === 0) return;
-                html += '<div>';
-                html += '<h3 class="text-sm font-bold text-white mb-2 uppercase tracking-wider">' + escHtml(group.category) + '</h3>';
-                html += '<div class="space-y-2">';
-                eps.forEach(function(e) {
-                    html += '<div class="glass-light rounded-xl p-3 border border-zinc-800/40">';
-                    html += '<div class="flex items-center gap-2 flex-wrap">' + methodBadge(e.m) +
-                        '<code class="text-xs sm:text-sm font-mono text-white break-all">' + escHtml(e.p) + '</code>' +
-                        (e.auth ? '<span class="text-[9px] text-amber-400 border border-amber-500/30 rounded px-1.5 py-0.5">auth</span>' : '<span class="text-[9px] text-zinc-500 border border-zinc-700/50 rounded px-1.5 py-0.5">public</span>') +
-                        '</div>';
-                    html += '<p class="text-[11px] text-zinc-400 mt-1.5 font-mono">' + escHtml(e.params) + '</p>';
-                    html += '<pre class="text-[11px] text-emerald-300/80 mt-1.5 bg-black/30 rounded-lg p-2 overflow-x-auto scrollbar-thin whitespace-pre-wrap">' + escHtml(e.resp) + '</pre>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
-            });
-            if (!html) html = '<p class="text-zinc-400 text-sm">No endpoints match your filter.</p>';
-            container.innerHTML = html;
         }
 
         // ============================================
@@ -4545,32 +3947,30 @@ var HTML_TEMPLATES = {
             var firstPort = ports[0] || '443';
             var isTlsPort = tlsPorts.includes(firstPort);
             var tlsVal = isTlsPort ? 'tls' : 'none';
-            var pathId = window.globalPath || '@VoidLatency';
-            var encPath = encodeURIComponent(pathId.charAt(0) === '/' ? pathId : '/' + pathId);
-
+            
             // Config 1: Expiry
             var remark1 = '⏳ ' + user.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
-            links.push('vle' + 'ss://' + (user.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=' + encPath + '&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
-
+            links.push('vle' + 'ss://' + (user.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
+            
             // Config 2: Usage
             var remark2 = '📊 ' + user.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
-            links.push('vle' + 'ss://' + (user.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=' + encPath + '&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
-
+            links.push('vle' + 'ss://' + (user.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
+            
             // Configs for all IPs and ports with just username
             ips.forEach(function(ip) {
                 ports.forEach(function(portStr) {
                     var isTlsPortLoop = tlsPorts.includes(portStr);
                     var tlsValLoop = isTlsPortLoop ? 'tls' : 'none';
                     var remark3 = configName;
-                    links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ip + ':' + portStr + '?path=' + encPath + '&security=' + tlsValLoop + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark3));
+                    links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsValLoop + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark3));
                 });
             });
             
             return links.join('\\n');
         }
 
-        function getSubLink(username) { return window.location.origin + '/sub/' + encodeURIComponent(username); }
-        function getJsonSubLink(username) { return window.location.origin + '/sub/' + encodeURIComponent(username) + '?format=json'; }
+        function getSubLink(username) { return window.location.origin + '/feed/' + encodeURIComponent(username); }
+        function getJsonSubLink(username) { return window.location.origin + '/feed/json/' + encodeURIComponent(username); }
         function getStatusLink(username) { return window.location.origin + '/status/' + encodeURIComponent(username); }
 
         function copySubLink(encodedUsername) {
@@ -4846,11 +4246,6 @@ var HTML_TEMPLATES = {
                         window.globalFragInt = statusData.frag_int;
                         document.getElementById('frag-interval').value = statusData.frag_int;
                     }
-                    if(statusData.path) {
-                        window.globalPath = statusData.path;
-                        document.getElementById('path-input').value = statusData.path;
-                    }
-                    setResetScheduler(!!statusData.reset_scheduler);
                 }
                 var res = await fetch('/locations');
                 if (!res.ok) throw new Error();
@@ -4867,35 +4262,10 @@ var HTML_TEMPLATES = {
         // ============================================
         // SETTINGS
         // ============================================
-        function setResetScheduler(enabled) {
-            window.resetSchedulerEnabled = enabled;
-            var toggle = document.getElementById('reset-scheduler-toggle');
-            var knob = document.getElementById('reset-scheduler-knob');
-            if (!toggle || !knob) return;
-            toggle.setAttribute('aria-checked', enabled ? 'true' : 'false');
-            if (enabled) {
-                toggle.classList.remove('bg-zinc-700');
-                toggle.classList.add('bg-emerald-500');
-                knob.classList.remove('translate-x-1');
-                knob.classList.add('translate-x-6');
-            } else {
-                toggle.classList.add('bg-zinc-700');
-                toggle.classList.remove('bg-emerald-500');
-                knob.classList.add('translate-x-1');
-                knob.classList.remove('translate-x-6');
-            }
-        }
-
-        function toggleResetScheduler() {
-            setResetScheduler(!window.resetSchedulerEnabled);
-        }
-
         async function saveSettings() {
             var select = document.getElementById('location-select');
             var fragLen = document.getElementById('frag-length').value || "20-30";
             var fragInt = document.getElementById('frag-interval').value || "1-2";
-            var pathVal = (document.getElementById('path-input').value || "@VoidLatency").trim();
-            var resetSched = !!window.resetSchedulerEnabled;
             var iata = select.value;
             var btn = document.getElementById('save-settings-btn');
             btn.disabled = true;
@@ -4921,7 +4291,7 @@ var HTML_TEMPLATES = {
                 var response = await fetch('/api/proxy-ip', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ proxy_ip: resolvedIp, iata: iata ? iata.toUpperCase() : '', frag_len: fragLen, frag_int: fragInt, path: pathVal, reset_scheduler: resetSched })
+                    body: JSON.stringify({ proxy_ip: resolvedIp, iata: iata ? iata.toUpperCase() : '', frag_len: fragLen, frag_int: fragInt })
                 });
                 if (response.ok) {
                     window.globalFragLen = fragLen;
@@ -5274,18 +4644,13 @@ var HTML_TEMPLATES = {
         // ============================================
         document.addEventListener('DOMContentLoaded', function() {
             renderPortCheckboxes();
-            initSim();
             loadUsers();
             loadLocations();
             loadAdminsList();
             loadTheme();
             checkUpdate();
-            pollSystemStats();
-            simTick();
             setInterval(function() { loadUsers(true); }, 30000);
             setInterval(updateXrayStatus, 10000);
-            setInterval(simTick, 1000);
-            setInterval(pollSystemStats, 5000);
             showPage('dashboard');
             document.getElementById('log-start-time').innerText = new Date().toLocaleString();
             setTimeout(function() {
@@ -5470,24 +4835,22 @@ var HTML_TEMPLATES = {
             var firstPort = ports[0] || '443';
             var isTlsPort = ['443', '2053', '2083', '2087', '2096', '8443'].includes(firstPort);
             var tlsVal = isTlsPort ? 'tls' : 'none';
-            var pathId = window.globalPath || '@VoidLatency';
-            var encPath = encodeURIComponent(pathId.charAt(0) === '/' ? pathId : '/' + pathId);
-
+            
             // Config 1: Expiry
             var remark1 = '⏳ ' + u.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
-            links.push('vle' + 'ss://' + (u.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=' + encPath + '&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
-
+            links.push('vle' + 'ss://' + (u.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
+            
             // Config 2: Usage
             var remark2 = '📊 ' + u.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
-            links.push('vle' + 'ss://' + (u.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=' + encPath + '&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
-
+            links.push('vle' + 'ss://' + (u.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
+            
             // Configs for all IPs and ports with just username
             ips.forEach(function(ip) {
                 ports.forEach(function(portStr) {
                     var isTlsPortLoop = ['443', '2053', '2083', '2087', '2096', '8443'].includes(portStr);
                     var tlsValLoop = isTlsPortLoop ? 'tls' : 'none';
                     var remark3 = configName;
-                    links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ip + ':' + portStr + '?path=' + encPath + '&security=' + tlsValLoop + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark3));
+                    links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ip + ':' + portStr + '?path=%2F&security=' + tlsValLoop + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark3));
                 });
             });
             
@@ -5501,7 +4864,7 @@ var HTML_TEMPLATES = {
         }
 
         function copyJsonSub() {
-            var link = window.location.protocol + '//' + getHost() + '/sub/' + encodeURIComponent(window.statusUser.username) + '?format=json';
+            var link = window.location.protocol + '//' + getHost() + '/feed/json/' + encodeURIComponent(window.statusUser.username);
             navigator.clipboard.writeText(link).then(function() { alert('✅ JSON subscription link copied!'); });
         }
 
