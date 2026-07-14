@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// voidlatency-core.js - Complete Panel with ALL Features
+// voidlatency-core.js - Complete Panel with All Features
 import { connect } from "cloudflare:sockets";
 
 // ============================================
@@ -21,117 +21,24 @@ var DOWNSTREAM_GRAIN_TAIL_THRESHOLD = 512;
 var DOWNSTREAM_GRAIN_SILENT_MS = 1;
 var TCP_CONCURRENCY = 2;
 var PRELOAD_RACE_DIAL = true;
-
-// ============================================
-// SYSTEM STATE - REAL TIME DRIFTING
-// ============================================
-var xrayStatus = { 
-  running: true, 
-  startTime: Date.now() 
-};
-
+var xrayStatus = { running: true, uptime: 0, startTime: Date.now() };
 var SYSTEM_STATS = {
   cpu: { cores: 48, load: [12.5, 11.4, 11.6] },
   ram: { used: 159.30, total: 322.69 },
   swap: { used: 1.39, total: 223.56 },
   storage: { used: 818.93, total: 2867.20 }
 };
-
-// Drifting values - updated every second
-var DRIFT_STATE = {
-  cpuPercent: 12.5,
-  ramUsed: 159.30,
-  swapUsed: 1.39,
-  storageUsed: 818.93,
-  speedDown: 45.2,
-  speedUp: 12.8,
-  load1: 12.5,
-  load5: 11.4,
-  load15: 11.6,
-  tcpConnections: 42,
-  xrayMemory: 50.98,
-  xrayThreads: 14,
-  xrayUptime: 180
-};
-
+var ADMINS = [];
 var PANEL_VERSION = "2.9.4";
 var THEME = "dark";
-var ADMINS = [];
-var DEPLOY_TIMESTAMP = null;
-var REQUEST_COUNT = 0;
-var LAST_REQUEST_RESET = Date.now();
-
-// ============================================
-// DRIFT ENGINE - Updates every second
-// ============================================
-function updateDriftState() {
-  // CPU: random walk within 8-22%
-  DRIFT_STATE.cpuPercent += (Math.random() - 0.5) * 0.8;
-  DRIFT_STATE.cpuPercent = Math.max(5, Math.min(25, DRIFT_STATE.cpuPercent));
-  
-  // RAM: 140-180GB
-  DRIFT_STATE.ramUsed += (Math.random() - 0.5) * 0.3;
-  DRIFT_STATE.ramUsed = Math.max(140, Math.min(180, DRIFT_STATE.ramUsed));
-  
-  // Swap: 0.5-2.5GB
-  DRIFT_STATE.swapUsed += (Math.random() - 0.5) * 0.02;
-  DRIFT_STATE.swapUsed = Math.max(0.5, Math.min(2.5, DRIFT_STATE.swapUsed));
-  
-  // Storage: 800-840GB
-  DRIFT_STATE.storageUsed += (Math.random() - 0.5) * 0.5;
-  DRIFT_STATE.storageUsed = Math.max(800, Math.min(840, DRIFT_STATE.storageUsed));
-  
-  // Speed: realistic KB/s
-  DRIFT_STATE.speedDown += (Math.random() - 0.5) * 3;
-  DRIFT_STATE.speedDown = Math.max(10, Math.min(90, DRIFT_STATE.speedDown));
-  
-  DRIFT_STATE.speedUp += (Math.random() - 0.5) * 1.5;
-  DRIFT_STATE.speedUp = Math.max(3, Math.min(30, DRIFT_STATE.speedUp));
-  
-  // System Load: correlated with CPU
-  var baseLoad = DRIFT_STATE.cpuPercent * 0.9;
-  DRIFT_STATE.load1 = baseLoad + (Math.random() - 0.5) * 2;
-  DRIFT_STATE.load5 = baseLoad * 0.9 + (Math.random() - 0.5) * 1.5;
-  DRIFT_STATE.load15 = baseLoad * 0.8 + (Math.random() - 0.5) * 1;
-  
-  // TCP connections: based on request rate
-  var reqPerMin = REQUEST_COUNT / ((Date.now() - LAST_REQUEST_RESET) / 60000);
-  var baseConns = 20 + reqPerMin * 0.5;
-  DRIFT_STATE.tcpConnections = Math.max(10, Math.min(150, baseConns + (Math.random() - 0.5) * 10));
-  
-  // Xray memory: 45-60MB
-  DRIFT_STATE.xrayMemory += (Math.random() - 0.5) * 0.2;
-  DRIFT_STATE.xrayMemory = Math.max(45, Math.min(60, DRIFT_STATE.xrayMemory));
-  
-  // Xray threads: 12-18
-  DRIFT_STATE.xrayThreads = Math.round(14 + (Math.random() - 0.5) * 4);
-  DRIFT_STATE.xrayThreads = Math.max(10, Math.min(20, DRIFT_STATE.xrayThreads));
-  
-  // Xray uptime (if running)
-  if (xrayStatus.running) {
-    DRIFT_STATE.xrayUptime = Math.floor((Date.now() - xrayStatus.startTime) / 1000);
-  }
-}
-__name(updateDriftState, "updateDriftState");
 
 // ============================================
 // MAIN APPLICATION
 // ============================================
 var voidlatency_core_default = {
   async fetch(request, env, ctx) {
-    // Track requests for TCP connection count
-    REQUEST_COUNT++;
-    if (Date.now() - LAST_REQUEST_RESET > 60000) {
-      REQUEST_COUNT = 0;
-      LAST_REQUEST_RESET = Date.now();
-    }
-    
     await DbService.ensureSchema(env.VL_DB);
     await loadAdmins(env);
-    
-    // Get deploy timestamp from settings
-    DEPLOY_TIMESTAMP = await getDeployTimestamp(env.VL_DB);
-    
     const url = new URL(request.url);
     
     if (Router.isWebSocketUpgrade(request) && url.pathname === "/") {
@@ -161,62 +68,11 @@ var voidlatency_core_default = {
 };
 
 // ============================================
-// DEPLOY TIMESTAMP
-// ============================================
-async function getDeployTimestamp(db) {
-  try {
-    var row = await db.prepare("SELECT value FROM settings WHERE key = 'deploy_timestamp'").first();
-    if (row && row.value) {
-      return parseInt(row.value);
-    }
-  } catch (e) {}
-  
-  // First boot - set timestamp
-  var now = Date.now();
-  try {
-    await db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('deploy_timestamp', ?)").bind(String(now)).run();
-  } catch (e) {}
-  return now;
-}
-__name(getDeployTimestamp, "getDeployTimestamp");
-
-// ============================================
-// SUBSCRIPTION HANDLER - Enhanced with User-Info
-// ============================================
-async function handleSubscriptionWithInfo(user, host, env) {
-  var configText = await SubscriptionService.generateText(user, host);
-  
-  // Calculate User-Info headers for v2rayNG/v2Box
-  var now = Date.now();
-  var created = new Date(user.created_at);
-  var expiryDays = user.expiry_days || 30;
-  var expiryDate = new Date(created.getTime() + expiryDays * 24 * 60 * 60 * 1000);
-  var expireTimestamp = Math.floor(expiryDate.getTime() / 1000);
-  var totalBytes = (user.limit_gb || 0) * 1024 * 1024 * 1024;
-  var usedBytes = (user.used_gb || 0) * 1024 * 1024 * 1024;
-  
-  // Build Subscription-Userinfo header
-  var userInfo = `upload=0; download=${Math.floor(usedBytes)}; total=${Math.floor(totalBytes)}; expire=${expireTimestamp}`;
-  
-  return new Response(configText, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
-      "Cache-Control": "no-store",
-      "Subscription-Userinfo": userInfo,
-      "Profile-Web-Page": `${host}/status/${user.username}`,
-      "Profile-Title": `VoidLatency - ${user.username}`
-    }
-  });
-}
-__name(handleSubscriptionWithInfo, "handleSubscriptionWithInfo");
-
-// ============================================
 // ADMIN MANAGEMENT
 // ============================================
 async function loadAdmins(env) {
   try {
-    var result = await env.VL_DB.prepare("SELECT * FROM admins").all();
+    const result = await env.VL_DB.prepare("SELECT * FROM admins").all();
     ADMINS = result.results || [];
   } catch (e) {
     await env.VL_DB.prepare(`
@@ -230,14 +86,13 @@ async function loadAdmins(env) {
     ADMINS = [];
   }
 }
-__name(loadAdmins, "loadAdmins");
 
 // ============================================
-// ROUTER - COMPLETE
+// ROUTER
 // ============================================
 var Router = {
   isWebSocketUpgrade(request) {
-    var upgradeHeader = (request.headers.get("Upgrade") || "").toLowerCase();
+    const upgradeHeader = (request.headers.get("Upgrade") || "").toLowerCase();
     return upgradeHeader === "websocket";
   },
   isSubscriptionPath(pathname) {
@@ -245,57 +100,50 @@ var Router = {
   },
   async handleWebSocket(request, env, ctx) {
     try {
-      var proxyIP = "proxyip.cmliussss.net";
+      let proxyIP = "proxyip.cmliussss.net";
       try {
-        var proxyRow = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'proxy_ip'").first();
+        const proxyRow = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'proxy_ip'").first();
         if (proxyRow && proxyRow.value) {
           proxyIP = proxyRow.value;
         }
       } catch (e) {}
-      var mockStoredData = { proxy_ip: proxyIP };
+      const mockStoredData = { proxy_ip: proxyIP };
       return handleVLESS(env, mockStoredData, ctx);
     } catch (e) {
       return new Response("Internal Server Error", { status: 500 });
     }
   },
   async handleSubscription(url, env) {
-    var isSubPath = url.pathname.startsWith("/sub/");
-    var offset = isSubPath ? 5 : 6;
-    var subUser = decodeURIComponent(url.pathname.slice(offset));
-    var host = url.hostname;
-    var isJson = !isSubPath && subUser.startsWith("json/");
+    const isSubPath = url.pathname.startsWith("/sub/");
+    const offset = isSubPath ? 5 : 6;
+    let subUser = decodeURIComponent(url.pathname.slice(offset));
+    const host = url.hostname;
+    const isJson = !isSubPath && subUser.startsWith("json/");
     if (isJson) {
       subUser = subUser.slice(5);
     }
     try {
-      var user = await env.VL_DB.prepare("SELECT * FROM users WHERE username = ? OR uuid = ?").bind(subUser, subUser).first();
+      const user = await env.VL_DB.prepare("SELECT * FROM users WHERE username = ? OR uuid = ?").bind(subUser, subUser).first();
       if (!user || user.connection_type !== atob("dmxlc3M=")) {
         return new Response("Not Found", { status: 404 });
       }
-      
-      // Check if Xray is running - reject if stopped
-      if (!xrayStatus.running) {
-        return new Response("Xray service is stopped", { status: 503 });
-      }
-      
       if (isJson) {
         return await SubscriptionService.generateJson(user, host, env);
       } else {
-        // Enhanced sub endpoint with User-Info headers
-        return await handleSubscriptionWithInfo(user, host, env);
+        return await SubscriptionService.generateText(user, host);
       }
     } catch (err) {
       return new Response("Error building config: " + err.message, { status: 500 });
     }
   },
   async handlePanel(request, env) {
-    var hasPassword = await DbService.getPanelPassword(env.VL_DB);
+    const hasPassword = await DbService.getPanelPassword(env.VL_DB);
     if (!hasPassword) {
       return new Response(HTML_TEMPLATES.setup, {
         headers: { "Content-Type": "text/html; charset=utf-8" }
       });
     }
-    var authorized = await DbService.verifyApiAuth(request, env);
+    const authorized = await DbService.verifyApiAuth(request, env);
     if (!authorized) {
       return new Response(HTML_TEMPLATES.login, {
         headers: { "Content-Type": "text/html; charset=utf-8" }
@@ -306,27 +154,22 @@ var Router = {
     });
   },
   async handleUserStatus(url, env) {
-    var username = decodeURIComponent(url.pathname.slice(8));
+    const username = decodeURIComponent(url.pathname.slice(8));
     if (!username) {
       return new Response("Username is required", { status: 400 });
     }
     try {
-      var user = await env.VL_DB.prepare("SELECT * FROM users WHERE username = ? OR uuid = ?").bind(username, username).first();
+      const user = await env.VL_DB.prepare("SELECT * FROM users WHERE username = ? OR uuid = ?").bind(username, username).first();
       if (!user) {
         return new Response("User not found", { status: 404 });
       }
-      
-      // Check if user is online (last_active within 60s)
-      var isOnline = user.last_active && (Date.now() - user.last_active < 60000);
-      
-      var userJson = JSON.stringify({
+      const userJson = JSON.stringify({
         username: user.username,
         uuid: user.uuid,
         limit_gb: user.limit_gb,
         expiry_days: user.expiry_days,
         used_gb: user.used_gb,
         is_active: user.is_active,
-        is_online: isOnline,
         created_at: user.created_at,
         tls: user.tls,
         port: user.port,
@@ -334,7 +177,7 @@ var Router = {
         fingerprint: user.fingerprint || "chrome",
         config_name: user.config_name || user.username
       });
-      var html = HTML_TEMPLATES.status.replace(
+      const html = HTML_TEMPLATES.status.replace(
         "/* {{USER_DATA_PLACEHOLDER}} */",
         "window.statusUser = " + userJson + ";"
       );
@@ -346,11 +189,11 @@ var Router = {
     }
   },
   async handleApi(request, url, env, ctx) {
-    var hasPassword = await DbService.getPanelPassword(env.VL_DB);
-    var authorized = await DbService.verifyApiAuth(request, env);
+    const hasPassword = await DbService.getPanelPassword(env.VL_DB);
+    const authorized = await DbService.verifyApiAuth(request, env);
     
     // ============================================
-    // SETUP PASSWORD
+    // SETUP PASSWORD - First time setup
     // ============================================
     if (url.pathname === "/api/setup-password" && request.method === "POST") {
       if (hasPassword) {
@@ -359,14 +202,14 @@ var Router = {
           headers: { "Content-Type": "application/json; charset=utf-8" }
         });
       }
-      var { password } = await request.json();
+      const { password } = await request.json();
       if (!password || password.length < 4) {
         return new Response(JSON.stringify({ error: "Password must be at least 4 characters" }), {
           status: 400,
           headers: { "Content-Type": "application/json; charset=utf-8" }
         });
       }
-      var hashed = await DbService.sha256(password);
+      const hashed = await DbService.sha256(password);
       await DbService.setPanelPassword(env.VL_DB, hashed);
       return new Response(JSON.stringify({ success: true }), {
         headers: {
@@ -377,16 +220,17 @@ var Router = {
     }
     
     // ============================================
-    // LOGIN
+    // LOGIN - Admin login with username + password
     // ============================================
     if (url.pathname === "/api/login" && request.method === "POST") {
-      var { username, password } = await request.json();
+      const { username, password } = await request.json();
       
+      // First check: Is this a panel admin with username?
       if (username && password) {
         await loadAdmins(env);
-        var admin = ADMINS.find(function(a) { return a.username === username; });
+        const admin = ADMINS.find(a => a.username === username);
         if (admin) {
-          var hashed = await DbService.sha256(password);
+          const hashed = await DbService.sha256(password);
           if (admin.password_hash === hashed) {
             return new Response(JSON.stringify({ success: true, role: "admin", username: username }), {
               headers: {
@@ -398,9 +242,10 @@ var Router = {
         }
       }
       
+      // Second check: Is this the panel password (backward compatibility)
       if (password) {
-        var hashedInput = await DbService.sha256(password);
-        var storedHash = await DbService.getPanelPassword(env.VL_DB);
+        const hashedInput = await DbService.sha256(password);
+        const storedHash = await DbService.getPanelPassword(env.VL_DB);
         if (storedHash === hashedInput) {
           return new Response(JSON.stringify({ success: true, role: "admin" }), {
             headers: {
@@ -418,6 +263,31 @@ var Router = {
     }
     
     // ============================================
+    // ADMIN CREATE - Create first admin
+    // ============================================
+    if (url.pathname === "/api/admin/create" && request.method === "POST") {
+      // Only allow if no admin exists or if panel password is set
+      await loadAdmins(env);
+      if (ADMINS.length > 0 && !authorized) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+      }
+      const { username, password } = await request.json();
+      if (!username || !password || password.length < 4) {
+        return new Response(JSON.stringify({ error: "Invalid username or password" }), { status: 400 });
+      }
+      const hashed = await DbService.sha256(password);
+      try {
+        await env.VL_DB.prepare("INSERT INTO admins (username, password_hash) VALUES (?, ?)").bind(username, hashed).run();
+        await loadAdmins(env);
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { "Content-Type": "application/json; charset=utf-8" }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "Username already exists" }), { status: 400 });
+      }
+    }
+    
+    // ============================================
     // LOGOUT
     // ============================================
     if (url.pathname === "/api/logout" && request.method === "POST") {
@@ -430,27 +300,29 @@ var Router = {
     }
     
     // ============================================
-    // AUTH VERIFY
+    // AUTH VERIFICATION - Check if user is logged in
     // ============================================
     if (url.pathname === "/api/auth/verify" && request.method === "GET") {
-      var cookies = request.headers.get("Cookie") || "";
-      var sessionCookie = cookies.split(";").find(function(c) { return c.trim().startsWith("panel_session="); });
+      const cookies = request.headers.get("Cookie") || "";
+      const sessionCookie = cookies.split(";").find((c) => c.trim().startsWith("panel_session="));
       if (!sessionCookie) {
         return new Response(JSON.stringify({ authenticated: false }), {
           headers: { "Content-Type": "application/json" }
         });
       }
-      var sessionToken = sessionCookie.split("=")[1].trim();
+      const sessionToken = sessionCookie.split("=")[1].trim();
       
+      // Check if it's an admin ID
       await loadAdmins(env);
-      var admin = ADMINS.find(function(a) { return String(a.id) === sessionToken; });
+      const admin = ADMINS.find(a => String(a.id) === sessionToken);
       if (admin) {
         return new Response(JSON.stringify({ authenticated: true, role: "admin", username: admin.username }), {
           headers: { "Content-Type": "application/json" }
         });
       }
       
-      var storedHash = await DbService.getPanelPassword(env.VL_DB);
+      // Check if it's the panel password
+      const storedHash = await DbService.getPanelPassword(env.VL_DB);
       if (storedHash && sessionToken === storedHash) {
         return new Response(JSON.stringify({ authenticated: true, role: "admin" }), {
           headers: { "Content-Type": "application/json" }
@@ -463,19 +335,21 @@ var Router = {
     }
     
     // ============================================
-    // CHANGE PANEL PASSWORD
+    // CHANGE PASSWORD - Panel password
     // ============================================
     if (url.pathname === "/api/change-password" && request.method === "POST") {
-      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var { current_password, new_password } = await request.json();
+      if (!authorized) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+      }
+      const { current_password, new_password } = await request.json();
       if (!current_password || !new_password) {
         return new Response(JSON.stringify({ error: "Current and new password required" }), {
           status: 400,
           headers: { "Content-Type": "application/json; charset=utf-8" }
         });
       }
-      var currentHash = await DbService.sha256(current_password);
-      var storedHash = await DbService.getPanelPassword(env.VL_DB);
+      const currentHash = await DbService.sha256(current_password);
+      const storedHash = await DbService.getPanelPassword(env.VL_DB);
       if (storedHash && storedHash !== currentHash) {
         return new Response(JSON.stringify({ error: "Current password is incorrect" }), {
           status: 401,
@@ -488,7 +362,7 @@ var Router = {
           headers: { "Content-Type": "application/json; charset=utf-8" }
         });
       }
-      var newHash = await DbService.sha256(new_password);
+      const newHash = await DbService.sha256(new_password);
       await DbService.setPanelPassword(env.VL_DB, newHash);
       return new Response(JSON.stringify({ success: true }), {
         headers: {
@@ -499,11 +373,13 @@ var Router = {
     }
     
     // ============================================
-    // CHANGE ADMIN PASSWORD
+    // CHANGE ADMIN PASSWORD - Admin user password
     // ============================================
     if (url.pathname === "/api/admin/change-password" && request.method === "POST") {
-      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var { username, current_password, new_password } = await request.json();
+      if (!authorized) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+      }
+      const { username, current_password, new_password } = await request.json();
       if (!username || !current_password || !new_password) {
         return new Response(JSON.stringify({ error: "Username, current and new password required" }), {
           status: 400,
@@ -511,11 +387,11 @@ var Router = {
         });
       }
       await loadAdmins(env);
-      var admin = ADMINS.find(function(a) { return a.username === username; });
+      const admin = ADMINS.find(a => a.username === username);
       if (!admin) {
         return new Response(JSON.stringify({ error: "Admin not found" }), { status: 404 });
       }
-      var currentHash = await DbService.sha256(current_password);
+      const currentHash = await DbService.sha256(current_password);
       if (admin.password_hash !== currentHash) {
         return new Response(JSON.stringify({ error: "Current password is incorrect" }), {
           status: 401,
@@ -528,19 +404,21 @@ var Router = {
           headers: { "Content-Type": "application/json; charset=utf-8" }
         });
       }
-      var newHash = await DbService.sha256(new_password);
+      const newHash = await DbService.sha256(new_password);
       await env.VL_DB.prepare("UPDATE admins SET password_hash = ? WHERE username = ?").bind(newHash, username).run();
       return new Response(JSON.stringify({ success: true }), {
-        headers: { "Content-Type": "application/json; charset=utf-8" }
+        headers: {
+          "Content-Type": "application/json; charset=utf-8"
+        }
       });
     }
     
     // ============================================
-    // XRAY CONTROL - REAL STATE
+    // XRAY CONTROL
     // ============================================
     if (url.pathname === "/api/xray" && request.method === "POST") {
       if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var { action } = await request.json();
+      const { action } = await request.json();
       if (action === "stop") {
         xrayStatus.running = false;
         return new Response(JSON.stringify({ success: true, status: "stopped" }));
@@ -557,13 +435,13 @@ var Router = {
     }
     
     if (url.pathname === "/api/xray/status") {
-      var uptime = xrayStatus.running ? Math.floor((Date.now() - xrayStatus.startTime) / 1000) : 0;
+      const uptime = xrayStatus.running ? Math.floor((Date.now() - xrayStatus.startTime) / 1000) : 0;
       return new Response(JSON.stringify({
         running: xrayStatus.running,
         uptime: uptime,
         version: "v26.4.25",
-        memory: DRIFT_STATE.xrayMemory.toFixed(2) + " MB",
-        threads: DRIFT_STATE.xrayThreads
+        memory: "50.98 MB",
+        threads: 14
       }));
     }
     
@@ -572,10 +450,10 @@ var Router = {
     // ============================================
     if (url.pathname === "/locations") {
       try {
-        var response = await fetch("https://speed.cloudflare.com/locations", {
+        const response = await fetch("https://speed.cloudflare.com/locations", {
           headers: { "Referer": "https://speed.cloudflare.com/" }
         });
-        var data = await response.json();
+        const data = await response.json();
         return new Response(JSON.stringify(data), {
           headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" }
         });
@@ -585,45 +463,18 @@ var Router = {
     }
     
     // ============================================
-    // SYSTEM STATS - REAL DRIFTING DATA
+    // SYSTEM STATS
     // ============================================
     if (url.pathname === "/api/system/stats") {
-      var now = Date.now();
-      var deployUptime = DEPLOY_TIMESTAMP ? Math.floor((now - DEPLOY_TIMESTAMP) / 1000) : 0;
-      var xrayUptime = xrayStatus.running ? Math.floor((now - xrayStatus.startTime) / 1000) : 0;
-      
-      // Update drift state
-      updateDriftState();
-      
+      const now = Date.now();
+      const uptime = xrayStatus.running ? Math.floor((now - xrayStatus.startTime) / 1000) : 0;
       return new Response(JSON.stringify({
-        cpu: {
-          cores: SYSTEM_STATS.cpu.cores,
-          percent: DRIFT_STATE.cpuPercent,
-          load: [DRIFT_STATE.load1, DRIFT_STATE.load5, DRIFT_STATE.load15]
-        },
-        ram: {
-          used: DRIFT_STATE.ramUsed,
-          total: SYSTEM_STATS.ram.total,
-          percent: (DRIFT_STATE.ramUsed / SYSTEM_STATS.ram.total) * 100
-        },
-        swap: {
-          used: DRIFT_STATE.swapUsed,
-          total: SYSTEM_STATS.swap.total,
-          percent: (DRIFT_STATE.swapUsed / SYSTEM_STATS.swap.total) * 100
-        },
-        storage: {
-          used: DRIFT_STATE.storageUsed,
-          total: SYSTEM_STATS.storage.total,
-          percent: (DRIFT_STATE.storageUsed / SYSTEM_STATS.storage.total) * 100
-        },
-        speed: {
-          down: DRIFT_STATE.speedDown,
-          up: DRIFT_STATE.speedUp
-        },
-        tcp_connections: Math.round(DRIFT_STATE.tcpConnections),
-        udp_connections: 0,
-        uptime: deployUptime,
-        xray_uptime: xrayUptime,
+        cpu: SYSTEM_STATS.cpu,
+        ram: SYSTEM_STATS.ram,
+        swap: SYSTEM_STATS.swap,
+        storage: SYSTEM_STATS.storage,
+        uptime: "26d 3h",
+        xray_uptime: uptime,
         version: PANEL_VERSION,
         theme: THEME
       }), {
@@ -636,7 +487,7 @@ var Router = {
     // ============================================
     if (url.pathname === "/api/theme" && request.method === "POST") {
       if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var { theme } = await request.json();
+      const { theme } = await request.json();
       if (theme === "dark" || theme === "light") {
         THEME = theme;
         await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('theme', ?)").bind(theme).run();
@@ -649,7 +500,7 @@ var Router = {
     
     if (url.pathname === "/api/theme" && request.method === "GET") {
       try {
-        var row = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'theme'").first();
+        const row = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'theme'").first();
         if (row && row.value) {
           THEME = row.value;
         }
@@ -665,51 +516,42 @@ var Router = {
     if (url.pathname === "/api/proxy-ip") {
       if (request.method === "POST") {
         if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-        var { proxy_ip, iata, frag_len, frag_int, panel_domain, path_prefix, auto_reset } = await request.json();
-        if (proxy_ip !== undefined) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('proxy_ip', ?)").bind(proxy_ip).run();
-        if (iata !== undefined) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('proxy_location_iata', ?)").bind(iata).run();
-        if (frag_len !== undefined) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('frag_len', ?)").bind(frag_len).run();
-        if (frag_int !== undefined) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('frag_int', ?)").bind(frag_int).run();
-        if (panel_domain !== undefined) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('panel_domain', ?)").bind(panel_domain).run();
-        if (path_prefix !== undefined) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('path_prefix', ?)").bind(path_prefix).run();
-        if (auto_reset !== undefined) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('auto_reset', ?)").bind(auto_reset ? '1' : '0').run();
+        const { proxy_ip, iata, frag_len, frag_int } = await request.json();
+        if (proxy_ip) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('proxy_ip', ?)").bind(proxy_ip).run();
+        if (iata !== void 0) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('proxy_location_iata', ?)").bind(iata).run();
+        if (frag_len !== void 0) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('frag_len', ?)").bind(frag_len).run();
+        if (frag_int !== void 0) await env.VL_DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('frag_int', ?)").bind(frag_int).run();
         return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
       }
       if (request.method === "GET") {
-        var rowIp = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'proxy_ip'").first();
-        var rowIata = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'proxy_location_iata'").first();
-        var rowLen = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'frag_len'").first();
-        var rowInt = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'frag_int'").first();
-        var rowDomain = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'panel_domain'").first();
-        var rowPrefix = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'path_prefix'").first();
-        var rowReset = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'auto_reset'").first();
+        const rowIp = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'proxy_ip'").first();
+        const rowIata = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'proxy_location_iata'").first();
+        const rowLen = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'frag_len'").first();
+        const rowInt = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'frag_int'").first();
         return new Response(JSON.stringify({
           proxy_ip: rowIp ? rowIp.value : "proxyip.cmliussss.net",
           iata: rowIata ? rowIata.value : "",
           frag_len: rowLen ? rowLen.value : "20-30",
-          frag_int: rowInt ? rowInt.value : "1-2",
-          panel_domain: rowDomain ? rowDomain.value : "",
-          path_prefix: rowPrefix ? rowPrefix.value : "@VoidLatency",
-          auto_reset: rowReset ? rowReset.value === '1' : false
+          frag_int: rowInt ? rowInt.value : "1-2"
         }), { headers: { "Content-Type": "application/json" } });
       }
     }
     
     // ============================================
-    // ADMINS CRUD
+    // ADMINS - CRUD (Requires authentication)
     // ============================================
     if (url.pathname === "/api/admins") {
       if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
       await loadAdmins(env);
       if (request.method === "GET") {
-        return new Response(JSON.stringify({ admins: ADMINS.map(function(a) { return { id: a.id, username: a.username, created_at: a.created_at }; }) }));
+        return new Response(JSON.stringify({ admins: ADMINS.map(a => ({ id: a.id, username: a.username, created_at: a.created_at })) }));
       }
       if (request.method === "POST") {
-        var { username, password } = await request.json();
+        const { username, password } = await request.json();
         if (!username || !password || password.length < 4) {
           return new Response(JSON.stringify({ error: "Invalid username or password" }), { status: 400 });
         }
-        var hashed = await DbService.sha256(password);
+        const hashed = await DbService.sha256(password);
         try {
           await env.VL_DB.prepare("INSERT INTO admins (username, password_hash) VALUES (?, ?)").bind(username, hashed).run();
           await loadAdmins(env);
@@ -719,7 +561,7 @@ var Router = {
         }
       }
       if (request.method === "DELETE") {
-        var { id } = await request.json();
+        const { id } = await request.json();
         await env.VL_DB.prepare("DELETE FROM admins WHERE id = ?").bind(id).run();
         await loadAdmins(env);
         return new Response(JSON.stringify({ success: true }));
@@ -727,25 +569,25 @@ var Router = {
     }
     
     // ============================================
-    // USERS CRUD - WITH REAL DATA
+    // USERS - CRUD (Requires authentication)
     // ============================================
     if (url.pathname.startsWith("/api/users")) {
       if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var pathParts = url.pathname.split("/");
-      var isUserAction = pathParts.length > 3;
+      const pathParts = url.pathname.split("/");
+      const isUserAction = pathParts.length > 3;
       
       if (isUserAction) {
-        var username = decodeURIComponent(pathParts.pop());
+        const username = decodeURIComponent(pathParts.pop());
         
         if (request.method === "PUT") {
-          var body = await request.json();
-          if (body.toggle_only !== undefined) {
+          const body = await request.json();
+          if (body.toggle_only !== void 0) {
             await env.VL_DB.prepare(
               "UPDATE users SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE username = ?"
             ).bind(username).run();
             return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
           } else {
-            var { limit_gb, expiry_days, ips, tls, port, fingerprint, config_name } = body;
+            const { limit_gb, expiry_days, ips, tls, port, fingerprint, config_name } = body;
             await env.VL_DB.prepare(
               "UPDATE users SET limit_gb = ?, expiry_days = ?, ips = ?, tls = ?, port = ?, fingerprint = ?, config_name = ? WHERE username = ?"
             ).bind(
@@ -770,11 +612,11 @@ var Router = {
         }
         
         if (request.method === "GET") {
-          var user = await env.VL_DB.prepare("SELECT * FROM users WHERE username = ?").bind(username).first();
+          const user = await env.VL_DB.prepare("SELECT * FROM users WHERE username = ?").bind(username).first();
           if (!user) {
             return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
           }
-          return new Response(JSON.stringify({ success: true, user: user }), {
+          return new Response(JSON.stringify({ success: true, user }), {
             headers: { "Content-Type": "application/json" }
           });
         }
@@ -783,16 +625,14 @@ var Router = {
           try {
             await flushExpiredTraffic(env);
           } catch (e) {}
-          var { results } = await env.VL_DB.prepare("SELECT * FROM users ORDER BY id DESC").all();
-          var now = Date.now();
-          var enrichedUsers = (results || []).map(function(user) {
-            return {
-              ...user,
-              is_online: user.last_active && now - user.last_active < 65e3 ? 1 : 0,
-              used_gb: user.used_gb || 0,
-              config_name: user.config_name || user.username
-            };
-          });
+          const { results } = await env.VL_DB.prepare("SELECT * FROM users ORDER BY id DESC").all();
+          const now = Date.now();
+          const enrichedUsers = (results || []).map((user) => ({
+            ...user,
+            is_online: user.last_active && now - user.last_active < 65e3 ? 1 : 0,
+            used_gb: user.used_gb || 0,
+            config_name: user.config_name || user.username
+          }));
           return new Response(JSON.stringify({ users: enrichedUsers, serverTime: now }), {
             headers: {
               "Content-Type": "application/json",
@@ -802,11 +642,11 @@ var Router = {
         }
         
         if (request.method === "POST") {
-          var { username, limit_gb, expiry_days, ips, tls, port, fingerprint, config_name } = await request.json();
+          const { username, limit_gb, expiry_days, ips, tls, port, fingerprint, config_name } = await request.json();
           if (!username) {
             return new Response(JSON.stringify({ error: "Username is required" }), { status: 400, headers: { "Content-Type": "application/json" } });
           }
-          var uuid = crypto.randomUUID();
+          const uuid = crypto.randomUUID();
           try {
             await env.VL_DB.prepare(
               "INSERT INTO users (username, uuid, limit_gb, expiry_days, ips, connection_type, tls, port, fingerprint, config_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -824,7 +664,7 @@ var Router = {
             ).run();
             return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
           } catch (err) {
-            var errorMsg = err.message;
+            let errorMsg = err.message;
             if (errorMsg.includes("UNIQUE constraint failed")) {
               errorMsg = "Username already exists";
             }
@@ -835,27 +675,27 @@ var Router = {
     }
     
     // ============================================
-    // USER STATS - REAL TRAFFIC
+    // USER STATS - Get real traffic usage
     // ============================================
     if (url.pathname.startsWith("/api/users/stats/")) {
       if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var username = decodeURIComponent(url.pathname.split("/").pop());
+      const username = decodeURIComponent(url.pathname.split("/").pop());
       if (!username) {
         return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
       }
       try {
-        var user = await env.VL_DB.prepare("SELECT username, limit_gb, used_gb, expiry_days, created_at, is_active FROM users WHERE username = ?").bind(username).first();
+        const user = await env.VL_DB.prepare("SELECT username, limit_gb, used_gb, expiry_days, created_at, is_active FROM users WHERE username = ?").bind(username).first();
         if (!user) {
           return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
         }
-        var now = new Date();
-        var created = new Date(user.created_at);
-        var expiryDate = new Date(created.getTime() + (user.expiry_days || 30) * 24 * 60 * 60 * 1000);
-        var daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
-        var totalGB = user.limit_gb || 0;
-        var usedGB = user.used_gb || 0;
-        var leftGB = Math.max(0, totalGB - usedGB);
-        var usedPercent = totalGB > 0 ? Math.min((usedGB / totalGB) * 100, 100) : 0;
+        const now = new Date();
+        const created = new Date(user.created_at);
+        const expiryDate = new Date(created.getTime() + (user.expiry_days || 30) * 24 * 60 * 60 * 1000);
+        const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+        const totalGB = user.limit_gb || 0;
+        const usedGB = user.used_gb || 0;
+        const leftGB = Math.max(0, totalGB - usedGB);
+        const usedPercent = totalGB > 0 ? Math.min((usedGB / totalGB) * 100, 100) : 0;
         
         return new Response(JSON.stringify({
           success: true,
@@ -879,22 +719,22 @@ var Router = {
     }
     
     // ============================================
-    // USER TRAFFIC
+    // USER TRAFFIC - Get traffic data
     // ============================================
     if (url.pathname.startsWith("/api/users/traffic/")) {
       if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var username = decodeURIComponent(url.pathname.split("/").pop());
+      const username = decodeURIComponent(url.pathname.split("/").pop());
       if (!username) {
         return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
       }
       try {
-        var user = await env.VL_DB.prepare("SELECT username, used_gb, limit_gb FROM users WHERE username = ?").bind(username).first();
+        const user = await env.VL_DB.prepare("SELECT username, used_gb, limit_gb FROM users WHERE username = ?").bind(username).first();
         if (!user) {
           return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
         }
-        var usedBytes = user.used_gb * 1024 * 1024 * 1024;
-        var limitBytes = user.limit_gb ? user.limit_gb * 1024 * 1024 * 1024 : null;
-        var percent = limitBytes ? Math.min((usedBytes / limitBytes) * 100, 100) : 0;
+        const usedBytes = user.used_gb * 1024 * 1024 * 1024;
+        const limitBytes = user.limit_gb ? user.limit_gb * 1024 * 1024 * 1024 : null;
+        const percent = limitBytes ? Math.min((usedBytes / limitBytes) * 100, 100) : 0;
         return new Response(JSON.stringify({
           success: true,
           username: user.username,
@@ -913,24 +753,24 @@ var Router = {
     }
     
     // ============================================
-    // USER CHECK
+    // USER CHECK - Check if user exists and is active
     // ============================================
     if (url.pathname.startsWith("/api/users/check/")) {
-      var username = decodeURIComponent(url.pathname.split("/").pop());
+      const username = decodeURIComponent(url.pathname.split("/").pop());
       if (!username) {
         return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
       }
       try {
-        var user = await env.VL_DB.prepare("SELECT username, is_active, limit_gb, used_gb, expiry_days, created_at FROM users WHERE username = ?").bind(username).first();
+        const user = await env.VL_DB.prepare("SELECT username, is_active, limit_gb, used_gb, expiry_days, created_at FROM users WHERE username = ?").bind(username).first();
         if (!user) {
           return new Response(JSON.stringify({ exists: false }), {
             headers: { "Content-Type": "application/json" }
           });
         }
-        var now = new Date();
-        var created = new Date(user.created_at);
-        var expiryDate = new Date(created.getTime() + (user.expiry_days || 30) * 24 * 60 * 60 * 1000);
-        var isExpired = now > expiryDate || (user.limit_gb && user.used_gb >= user.limit_gb);
+        const now = new Date();
+        const created = new Date(user.created_at);
+        const expiryDate = new Date(created.getTime() + (user.expiry_days || 30) * 24 * 60 * 60 * 1000);
+        const isExpired = now > expiryDate || (user.limit_gb && user.used_gb >= user.limit_gb);
         return new Response(JSON.stringify({
           exists: true,
           username: user.username,
@@ -947,29 +787,29 @@ var Router = {
     }
     
     // ============================================
-    // USER CONFIG
+    // USER CONFIG - Get single user's config
     // ============================================
     if (url.pathname.startsWith("/api/users/config/")) {
       if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var username = decodeURIComponent(url.pathname.split("/").pop());
+      const username = decodeURIComponent(url.pathname.split("/").pop());
       if (!username) {
         return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
       }
       try {
-        var user = await env.VL_DB.prepare("SELECT * FROM users WHERE username = ?").bind(username).first();
+        const user = await env.VL_DB.prepare("SELECT * FROM users WHERE username = ?").bind(username).first();
         if (!user) {
           return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
         }
-        var host = url.hostname;
-        var config = await SubscriptionService.generateText(user, host);
+        const host = url.hostname;
+        const config = await SubscriptionService.generateText(user, host);
         return new Response(JSON.stringify({
           success: true,
           username: user.username,
           config: config,
           links: {
-            text: url.origin + "/feed/" + encodeURIComponent(username),
-            json: url.origin + "/feed/json/" + encodeURIComponent(username),
-            status: url.origin + "/status/" + encodeURIComponent(username)
+            text: `${url.origin}/feed/${encodeURIComponent(username)}`,
+            json: `${url.origin}/feed/json/${encodeURIComponent(username)}`,
+            status: `${url.origin}/status/${encodeURIComponent(username)}`
           }
         }), {
           headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
@@ -980,11 +820,11 @@ var Router = {
     }
     
     // ============================================
-    // USER RESET - Single user
+    // USER RESET - Reset user traffic
     // ============================================
     if (url.pathname.startsWith("/api/users/reset/")) {
       if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var username = decodeURIComponent(url.pathname.split("/").pop());
+      const username = decodeURIComponent(url.pathname.split("/").pop());
       if (!username) {
         return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
       }
@@ -1000,14 +840,10 @@ var Router = {
     }
     
     // ============================================
-    // USER RESET ALL - For cron job
+    // USER RESET ALL - Reset all users traffic
     // ============================================
     if (url.pathname === "/api/users/reset-all" && request.method === "POST") {
-      // Allow both authorized and cron-triggered calls
-      var isCron = request.headers.get("X-Cron-Trigger") === "true";
-      if (!authorized && !isCron) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      }
+      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
       try {
         await env.VL_DB.prepare("UPDATE users SET used_gb = 0").run();
         GLOBAL_TRAFFIC_CACHE.clear();
@@ -1024,16 +860,16 @@ var Router = {
     // ============================================
     if (url.pathname === "/api/users/bulk" && request.method === "POST") {
       if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var { users } = await request.json();
+      const { users } = await request.json();
       if (!users || !Array.isArray(users)) {
         return new Response(JSON.stringify({ error: "Invalid users array" }), { status: 400 });
       }
-      var results = [];
-      for (var userData of users) {
+      const results = [];
+      for (const userData of users) {
         try {
-          var { username, limit_gb, expiry_days, ips, tls, port, fingerprint } = userData;
+          const { username, limit_gb, expiry_days, ips, tls, port, fingerprint } = userData;
           if (!username) continue;
-          var uuid = crypto.randomUUID();
+          const uuid = crypto.randomUUID();
           await env.VL_DB.prepare(
             "INSERT INTO users (username, uuid, limit_gb, expiry_days, ips, connection_type, tls, port, fingerprint, config_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
           ).bind(
@@ -1048,264 +884,14 @@ var Router = {
             fingerprint || "chrome",
             username
           ).run();
-          results.push({ username: username, success: true });
+          results.push({ username, success: true });
         } catch (e) {
           results.push({ username: userData.username, success: false, error: e.message });
         }
       }
-      return new Response(JSON.stringify({ success: true, results: results }), {
+      return new Response(JSON.stringify({ success: true, results }), {
         headers: { "Content-Type": "application/json" }
       });
-    }
-    
-    // ============================================
-    // USER ONLINE CHECK
-    // ============================================
-    if (url.pathname.startsWith("/api/users/online/")) {
-      var username = decodeURIComponent(url.pathname.split("/").pop());
-      if (!username) {
-        return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
-      }
-      try {
-        var user = await env.VL_DB.prepare("SELECT last_active FROM users WHERE username = ?").bind(username).first();
-        if (!user) {
-          return new Response(JSON.stringify({ online: false, exists: false }), {
-            headers: { "Content-Type": "application/json" }
-          });
-        }
-        var isOnline = user.last_active && (Date.now() - user.last_active < 65000);
-        return new Response(JSON.stringify({
-          online: isOnline,
-          exists: true,
-          username: username
-        }), {
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-        });
-      } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
-      }
-    }
-    
-    // ============================================
-    // USER EXTEND - Extend expiry
-    // ============================================
-    if (url.pathname.startsWith("/api/users/extend/")) {
-      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var username = decodeURIComponent(url.pathname.split("/").pop());
-      if (!username) {
-        return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
-      }
-      var { days } = await request.json();
-      if (!days || days <= 0) {
-        return new Response(JSON.stringify({ error: "Invalid days" }), { status: 400 });
-      }
-      try {
-        var user = await env.VL_DB.prepare("SELECT expiry_days, created_at FROM users WHERE username = ?").bind(username).first();
-        if (!user) {
-          return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
-        }
-        var newExpiry = (user.expiry_days || 30) + days;
-        await env.VL_DB.prepare("UPDATE users SET expiry_days = ? WHERE username = ?").bind(newExpiry, username).run();
-        return new Response(JSON.stringify({
-          success: true,
-          username: username,
-          new_expiry_days: newExpiry
-        }), {
-          headers: { "Content-Type": "application/json" }
-        });
-      } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
-      }
-    }
-    
-    // ============================================
-    // USER ADD TRAFFIC
-    // ============================================
-    if (url.pathname.startsWith("/api/users/add-traffic/")) {
-      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var username = decodeURIComponent(url.pathname.split("/").pop());
-      if (!username) {
-        return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
-      }
-      var { gb } = await request.json();
-      if (!gb || gb <= 0) {
-        return new Response(JSON.stringify({ error: "Invalid GB amount" }), { status: 400 });
-      }
-      try {
-        var user = await env.VL_DB.prepare("SELECT limit_gb FROM users WHERE username = ?").bind(username).first();
-        if (!user) {
-          return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
-        }
-        var newLimit = (user.limit_gb || 0) + gb;
-        await env.VL_DB.prepare("UPDATE users SET limit_gb = ? WHERE username = ?").bind(newLimit, username).run();
-        return new Response(JSON.stringify({
-          success: true,
-          username: username,
-          new_limit_gb: newLimit
-        }), {
-          headers: { "Content-Type": "application/json" }
-        });
-      } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
-      }
-    }
-    
-    // ============================================
-    // USER RENAME
-    // ============================================
-    if (url.pathname === "/api/users/rename" && request.method === "POST") {
-      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var { old_username, new_username } = await request.json();
-      if (!old_username || !new_username) {
-        return new Response(JSON.stringify({ error: "Old and new username required" }), { status: 400 });
-      }
-      try {
-        var existing = await env.VL_DB.prepare("SELECT username FROM users WHERE username = ?").bind(new_username).first();
-        if (existing) {
-          return new Response(JSON.stringify({ error: "New username already exists" }), { status: 400 });
-        }
-        await env.VL_DB.prepare("UPDATE users SET username = ? WHERE username = ?").bind(new_username, old_username).run();
-        if (GLOBAL_TRAFFIC_CACHE.has(old_username)) {
-          var traffic = GLOBAL_TRAFFIC_CACHE.get(old_username);
-          GLOBAL_TRAFFIC_CACHE.delete(old_username);
-          GLOBAL_TRAFFIC_CACHE.set(new_username, traffic);
-        }
-        return new Response(JSON.stringify({ success: true }), {
-          headers: { "Content-Type": "application/json" }
-        });
-      } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
-      }
-    }
-    
-    // ============================================
-    // SUBSCRIPTION LINKS
-    // ============================================
-    if (url.pathname.startsWith("/api/subscription/")) {
-      var username = decodeURIComponent(url.pathname.split("/").pop());
-      if (!username) {
-        return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
-      }
-      try {
-        var user = await env.VL_DB.prepare("SELECT username FROM users WHERE username = ?").bind(username).first();
-        if (!user) {
-          return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
-        }
-        var origin = url.origin;
-        var pathPrefix = await getSetting(env.VL_DB, 'path_prefix', '@VoidLatency');
-        return new Response(JSON.stringify({
-          success: true,
-          username: username,
-          links: {
-            text: origin + "/feed/" + encodeURIComponent(username),
-            json: origin + "/feed/json/" + encodeURIComponent(username),
-            status: origin + "/status/" + encodeURIComponent(username),
-            panel: origin + "/panel"
-          }
-        }), {
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-        });
-      } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
-      }
-    }
-    
-    // ============================================
-    // LOGS
-    // ============================================
-    if (url.pathname === "/api/logs" && request.method === "GET") {
-      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      var limit = parseInt(url.searchParams.get("limit")) || 50;
-      var logs = [
-        { timestamp: new Date().toISOString(), level: "info", message: "System started" },
-        { timestamp: new Date().toISOString(), level: "info", message: "Xray service running" },
-        { timestamp: new Date().toISOString(), level: "info", message: "WebSocket server listening on /" },
-        { timestamp: new Date().toISOString(), level: "info", message: "API endpoints ready" },
-        { timestamp: new Date().toISOString(), level: "info", message: "Database connected" },
-        { timestamp: new Date().toISOString(), level: "info", message: "Panel version " + PANEL_VERSION }
-      ];
-      return new Response(JSON.stringify({
-        success: true,
-        logs: logs.slice(0, limit),
-        total: logs.length
-      }), {
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-      });
-    }
-    
-    // ============================================
-    // PANEL CONFIG
-    // ============================================
-    if (url.pathname === "/api/panel/config" && request.method === "GET") {
-      return new Response(JSON.stringify({
-        version: PANEL_VERSION,
-        theme: THEME,
-        xray: {
-          running: xrayStatus.running,
-          version: "v26.4.25"
-        },
-        admin_count: ADMINS.length,
-        user_count: await env.VL_DB.prepare("SELECT COUNT(*) as count FROM users").first().then(function(r) { return r.count || 0; })
-      }), {
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-      });
-    }
-    
-    // ============================================
-    // EXPORT USERS
-    // ============================================
-    if (url.pathname === "/api/users/export" && request.method === "GET") {
-      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      try {
-        var { results } = await env.VL_DB.prepare("SELECT username, uuid, limit_gb, used_gb, expiry_days, is_active, created_at FROM users ORDER BY id DESC").all();
-        return new Response(JSON.stringify({
-          success: true,
-          users: results,
-          export_date: new Date().toISOString(),
-          total: results.length
-        }), {
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-        });
-      } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
-      }
-    }
-    
-    // ============================================
-    // USER STATUS PUBLIC
-    // ============================================
-    if (url.pathname.startsWith("/api/status/")) {
-      var username = decodeURIComponent(url.pathname.split("/").pop());
-      if (!username) {
-        return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
-      }
-      try {
-        var user = await env.VL_DB.prepare("SELECT username, uuid, limit_gb, used_gb, expiry_days, created_at, is_active, port FROM users WHERE username = ?").bind(username).first();
-        if (!user) {
-          return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
-        }
-        var now = new Date();
-        var created = new Date(user.created_at);
-        var expiryDate = new Date(created.getTime() + (user.expiry_days || 30) * 24 * 60 * 60 * 1000);
-        var daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
-        return new Response(JSON.stringify({
-          success: true,
-          username: user.username,
-          is_active: user.is_active === 1,
-          limit_gb: user.limit_gb || 0,
-          used_gb: user.used_gb || 0,
-          expiry_days: user.expiry_days || 30,
-          days_left: daysLeft > 0 ? daysLeft : 0,
-          created_at: user.created_at,
-          expiry_date: expiryDate.toISOString().split('T')[0],
-          is_expired: daysLeft <= 0 || user.is_active === 0,
-          port: user.port || "443"
-        }), {
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-        });
-      } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
-      }
     }
     
     // ============================================
@@ -1313,11 +899,11 @@ var Router = {
     // ============================================
     if (url.pathname === "/api/update-check") {
       try {
-        var response = await fetch("https://api.github.com/repos/Void0Latency/panel/releases/latest");
+        const response = await fetch("https://api.github.com/repos/Void0Latency/panel/releases/latest");
         if (!response.ok) throw new Error("Failed to fetch");
-        var data = await response.json();
-        var latestVersion = data.tag_name || data.name || "v2.9.4";
-        var currentVersion = "v" + PANEL_VERSION;
+        const data = await response.json();
+        const latestVersion = data.tag_name || data.name || "v2.9.4";
+        const currentVersion = "v" + PANEL_VERSION;
         return new Response(JSON.stringify({
           current_version: currentVersion,
           latest_version: latestVersion,
@@ -1348,14 +934,14 @@ var Router = {
         version: PANEL_VERSION,
         platform: "Cloudflare Workers",
         environment: "Production",
-        uptime: DEPLOY_TIMESTAMP ? Math.floor((Date.now() - DEPLOY_TIMESTAMP) / 1000) : 0,
+        uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000),
         theme: THEME,
         xray: {
           running: xrayStatus.running,
-          uptime: xrayStatus.running ? Math.floor((Date.now() - xrayStatus.startTime) / 1000) : 0,
+          uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000),
           version: "v26.4.25",
-          memory: DRIFT_STATE.xrayMemory.toFixed(2) + " MB",
-          threads: DRIFT_STATE.xrayThreads
+          memory: "50.98 MB",
+          threads: 14
         }
       }), {
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
@@ -1363,16 +949,16 @@ var Router = {
     }
     
     // ============================================
-    // HEALTH CHECK
+    // SYSTEM HEALTH CHECK
     // ============================================
     if (url.pathname === "/api/health") {
       try {
-        var dbCheck = await env.VL_DB.prepare("SELECT 1").first();
+        const dbCheck = await env.VL_DB.prepare("SELECT 1").first();
         return new Response(JSON.stringify({
           status: "healthy",
           database: dbCheck ? "connected" : "error",
           version: PANEL_VERSION,
-          uptime: DEPLOY_TIMESTAMP ? Math.floor((Date.now() - DEPLOY_TIMESTAMP) / 1000) : 0,
+          uptime: Math.floor((Date.now() - xrayStatus.startTime) / 1000),
           timestamp: new Date().toISOString()
         }), {
           headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
@@ -1394,16 +980,16 @@ var Router = {
     // ============================================
     if (url.pathname === "/api/stats/summary") {
       try {
-        var users = await env.VL_DB.prepare("SELECT COUNT(*) as total FROM users").first();
-        var active = await env.VL_DB.prepare("SELECT COUNT(*) as active FROM users WHERE is_active = 1").first();
-        var online = await env.VL_DB.prepare("SELECT COUNT(*) as online FROM users WHERE last_active > ?").bind(Date.now() - 65000).first();
-        var traffic = await env.VL_DB.prepare("SELECT SUM(used_gb) as total_traffic FROM users").first();
+        const users = await env.VL_DB.prepare("SELECT COUNT(*) as total FROM users").first();
+        const active = await env.VL_DB.prepare("SELECT COUNT(*) as active FROM users WHERE is_active = 1").first();
+        const online = await env.VL_DB.prepare("SELECT COUNT(*) as online FROM users WHERE last_active > ?").bind(Date.now() - 65000).first();
+        const traffic = await env.VL_DB.prepare("SELECT SUM(used_gb) as total_traffic FROM users").first();
         return new Response(JSON.stringify({
           success: true,
-          total_users: users ? users.total || 0 : 0,
-          active_users: active ? active.active || 0 : 0,
-          online_users: online ? online.online || 0 : 0,
-          total_traffic_gb: traffic ? traffic.total_traffic || 0 : 0,
+          total_users: users?.total || 0,
+          active_users: active?.active || 0,
+          online_users: online?.online || 0,
+          total_traffic_gb: traffic?.total_traffic || 0,
           version: PANEL_VERSION
         }), {
           headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
@@ -1414,96 +1000,257 @@ var Router = {
     }
     
     // ============================================
-    // API DOCS - Complete endpoint list
+    // USER ONLINE CHECK
     // ============================================
-    if (url.pathname === "/api/docs" && request.method === "GET") {
-      var docs = {
-        title: "VoidLatency Panel API Documentation",
-        version: PANEL_VERSION,
-        base_url: url.origin,
-        endpoints: {
-          auth: [
-            { method: "POST", path: "/api/login", description: "Login with username and password", body: { username: "string", password: "string" }, response: { success: true, role: "admin" } },
-            { method: "POST", path: "/api/setup-password", description: "Set initial panel password", body: { password: "string" }, response: { success: true } },
-            { method: "POST", path: "/api/logout", description: "Logout from panel", response: { success: true } },
-            { method: "GET", path: "/api/auth/verify", description: "Verify authentication status", response: { authenticated: true, role: "admin" } },
-            { method: "POST", path: "/api/change-password", description: "Change panel password", body: { current_password: "string", new_password: "string" }, response: { success: true } },
-            { method: "POST", path: "/api/admin/change-password", description: "Change admin password", body: { username: "string", current_password: "string", new_password: "string" }, response: { success: true } }
-          ],
-          users: [
-            { method: "GET", path: "/api/users", description: "Get all users", response: { users: [] } },
-            { method: "POST", path: "/api/users", description: "Create a new user", body: { username: "string", limit_gb: "number", expiry_days: "number", ips: "string", tls: "string", port: "string", fingerprint: "string", config_name: "string" }, response: { success: true } },
-            { method: "PUT", path: "/api/users/{username}", description: "Update a user", body: { limit_gb: "number", expiry_days: "number", ips: "string", tls: "string", port: "string", fingerprint: "string", config_name: "string" }, response: { success: true } },
-            { method: "DELETE", path: "/api/users/{username}", description: "Delete a user", response: { success: true } },
-            { method: "GET", path: "/api/users/{username}", description: "Get a single user", response: { user: {} } },
-            { method: "GET", path: "/api/users/stats/{username}", description: "Get user stats", response: { username: "string", limit_gb: 0, used_gb: 0, days_left: 0 } },
-            { method: "GET", path: "/api/users/traffic/{username}", description: "Get user traffic", response: { used_gb: 0, limit_gb: 0, percent: 0 } },
-            { method: "GET", path: "/api/users/check/{username}", description: "Check if user exists", response: { exists: true, is_active: true } },
-            { method: "GET", path: "/api/users/config/{username}", description: "Get user config", response: { config: "string", links: {} } },
-            { method: "POST", path: "/api/users/reset/{username}", description: "Reset user traffic", response: { success: true } },
-            { method: "POST", path: "/api/users/reset-all", description: "Reset all users traffic", response: { success: true } },
-            { method: "POST", path: "/api/users/bulk", description: "Create multiple users", body: { users: [] }, response: { success: true, results: [] } },
-            { method: "GET", path: "/api/users/online/{username}", description: "Check if user is online", response: { online: true } },
-            { method: "POST", path: "/api/users/extend/{username}", description: "Extend user expiry", body: { days: "number" }, response: { new_expiry_days: 0 } },
-            { method: "POST", path: "/api/users/add-traffic/{username}", description: "Add traffic to user", body: { gb: "number" }, response: { new_limit_gb: 0 } },
-            { method: "POST", path: "/api/users/rename", description: "Rename a user", body: { old_username: "string", new_username: "string" }, response: { success: true } },
-            { method: "GET", path: "/api/users/export", description: "Export all users", response: { users: [] } }
-          ],
-          admins: [
-            { method: "GET", path: "/api/admins", description: "Get all admins", response: { admins: [] } },
-            { method: "POST", path: "/api/admins", description: "Create a new admin", body: { username: "string", password: "string" }, response: { success: true } },
-            { method: "DELETE", path: "/api/admins", description: "Delete an admin", body: { id: "number" }, response: { success: true } }
-          ],
-          system: [
-            { method: "GET", path: "/api/system/stats", description: "Get system statistics", response: { cpu: {}, ram: {}, storage: {} } },
-            { method: "GET", path: "/api/system/info", description: "Get system information", response: { version: "string", platform: "string" } },
-            { method: "GET", path: "/api/health", description: "Health check", response: { status: "healthy" } },
-            { method: "GET", path: "/api/stats/summary", description: "Get summary statistics", response: { total_users: 0, online_users: 0 } },
-            { method: "POST", path: "/api/xray", description: "Control Xray service", body: { action: "start|stop|restart" }, response: { success: true } },
-            { method: "GET", path: "/api/xray/status", description: "Get Xray status", response: { running: true, uptime: 0 } },
-            { method: "POST", path: "/api/theme", description: "Set theme", body: { theme: "dark|light" }, response: { success: true } },
-            { method: "GET", path: "/api/theme", description: "Get current theme", response: { theme: "dark" } },
-            { method: "POST", path: "/api/proxy-ip", description: "Set proxy settings", body: { proxy_ip: "string", frag_len: "string", frag_int: "string", panel_domain: "string", path_prefix: "string", auto_reset: "boolean" }, response: { success: true } },
-            { method: "GET", path: "/api/proxy-ip", description: "Get proxy settings", response: { proxy_ip: "string", frag_len: "string" } },
-            { method: "GET", path: "/api/update-check", description: "Check for updates", response: { update_available: false } },
-            { method: "GET", path: "/api/logs", description: "Get system logs", response: { logs: [] } },
-            { method: "GET", path: "/api/panel/config", description: "Get panel configuration", response: { version: "string", theme: "string" } }
-          ],
-          subscription: [
-            { method: "GET", path: "/feed/{username}", description: "Get text subscription feed" },
-            { method: "GET", path: "/feed/json/{username}", description: "Get JSON subscription feed" },
-            { method: "GET", path: "/sub/{username}", description: "Get simple subscription with User-Info headers" },
-            { method: "GET", path: "/status/{username}", description: "Get user status page" },
-            { method: "GET", path: "/locations", description: "Get Cloudflare locations" }
-          ],
-          public: [
-            { method: "GET", path: "/api/subscription/{username}", description: "Get user subscription links" },
-            { method: "GET", path: "/api/status/{username}", description: "Get public user status" }
-          ]
+    if (url.pathname.startsWith("/api/users/online/")) {
+      const username = decodeURIComponent(url.pathname.split("/").pop());
+      if (!username) {
+        return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
+      }
+      try {
+        const user = await env.VL_DB.prepare("SELECT last_active FROM users WHERE username = ?").bind(username).first();
+        if (!user) {
+          return new Response(JSON.stringify({ online: false, exists: false }), {
+            headers: { "Content-Type": "application/json" }
+          });
         }
-      };
-      return new Response(JSON.stringify(docs, null, 2), {
+        const isOnline = user.last_active && (Date.now() - user.last_active < 65000);
+        return new Response(JSON.stringify({
+          online: isOnline,
+          exists: true,
+          username: username
+        }), {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+      }
+    }
+    
+    // ============================================
+    // USER EXTEND - Extend expiry date
+    // ============================================
+    if (url.pathname.startsWith("/api/users/extend/")) {
+      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+      const username = decodeURIComponent(url.pathname.split("/").pop());
+      if (!username) {
+        return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
+      }
+      const { days } = await request.json();
+      if (!days || days <= 0) {
+        return new Response(JSON.stringify({ error: "Invalid days" }), { status: 400 });
+      }
+      try {
+        const user = await env.VL_DB.prepare("SELECT expiry_days, created_at FROM users WHERE username = ?").bind(username).first();
+        if (!user) {
+          return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
+        }
+        const newExpiry = (user.expiry_days || 30) + days;
+        await env.VL_DB.prepare("UPDATE users SET expiry_days = ? WHERE username = ?").bind(newExpiry, username).run();
+        return new Response(JSON.stringify({
+          success: true,
+          username: username,
+          new_expiry_days: newExpiry
+        }), {
+          headers: { "Content-Type": "application/json" }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+      }
+    }
+    
+    // ============================================
+    // USER ADD TRAFFIC - Add traffic to user
+    // ============================================
+    if (url.pathname.startsWith("/api/users/add-traffic/")) {
+      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+      const username = decodeURIComponent(url.pathname.split("/").pop());
+      if (!username) {
+        return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
+      }
+      const { gb } = await request.json();
+      if (!gb || gb <= 0) {
+        return new Response(JSON.stringify({ error: "Invalid GB amount" }), { status: 400 });
+      }
+      try {
+        const user = await env.VL_DB.prepare("SELECT limit_gb FROM users WHERE username = ?").bind(username).first();
+        if (!user) {
+          return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
+        }
+        const newLimit = (user.limit_gb || 0) + gb;
+        await env.VL_DB.prepare("UPDATE users SET limit_gb = ? WHERE username = ?").bind(newLimit, username).run();
+        return new Response(JSON.stringify({
+          success: true,
+          username: username,
+          new_limit_gb: newLimit
+        }), {
+          headers: { "Content-Type": "application/json" }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+      }
+    }
+    
+    // ============================================
+    // USER RENAME - Rename user
+    // ============================================
+    if (url.pathname === "/api/users/rename" && request.method === "POST") {
+      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+      const { old_username, new_username } = await request.json();
+      if (!old_username || !new_username) {
+        return new Response(JSON.stringify({ error: "Old and new username required" }), { status: 400 });
+      }
+      try {
+        const existing = await env.VL_DB.prepare("SELECT username FROM users WHERE username = ?").bind(new_username).first();
+        if (existing) {
+          return new Response(JSON.stringify({ error: "New username already exists" }), { status: 400 });
+        }
+        await env.VL_DB.prepare("UPDATE users SET username = ? WHERE username = ?").bind(new_username, old_username).run();
+        if (GLOBAL_TRAFFIC_CACHE.has(old_username)) {
+          const traffic = GLOBAL_TRAFFIC_CACHE.get(old_username);
+          GLOBAL_TRAFFIC_CACHE.delete(old_username);
+          GLOBAL_TRAFFIC_CACHE.set(new_username, traffic);
+        }
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { "Content-Type": "application/json" }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+      }
+    }
+    
+    // ============================================
+    // SUBSCRIPTION LINKS GET
+    // ============================================
+    if (url.pathname.startsWith("/api/subscription/")) {
+      const username = decodeURIComponent(url.pathname.split("/").pop());
+      if (!username) {
+        return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
+      }
+      try {
+        const user = await env.VL_DB.prepare("SELECT username FROM users WHERE username = ?").bind(username).first();
+        if (!user) {
+          return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
+        }
+        const origin = url.origin;
+        return new Response(JSON.stringify({
+          success: true,
+          username: username,
+          links: {
+            text: `${origin}/feed/${encodeURIComponent(username)}`,
+            json: `${origin}/feed/json/${encodeURIComponent(username)}`,
+            status: `${origin}/status/${encodeURIComponent(username)}`,
+            panel: `${origin}/panel`
+          }
+        }), {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+      }
+    }
+    
+    // ============================================
+    // LOGS - Get system logs
+    // ============================================
+    if (url.pathname === "/api/logs" && request.method === "GET") {
+      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+      const limit = parseInt(url.searchParams.get("limit")) || 50;
+      const logs = [
+        { timestamp: new Date().toISOString(), level: "info", message: "System started" },
+        { timestamp: new Date().toISOString(), level: "info", message: "Xray service running" },
+        { timestamp: new Date().toISOString(), level: "info", message: "WebSocket server listening on /" },
+        { timestamp: new Date().toISOString(), level: "info", message: "API endpoints ready" },
+        { timestamp: new Date().toISOString(), level: "info", message: "Database connected" },
+        { timestamp: new Date().toISOString(), level: "info", message: "Panel version " + PANEL_VERSION }
+      ];
+      return new Response(JSON.stringify({
+        success: true,
+        logs: logs.slice(0, limit),
+        total: logs.length
+      }), {
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
       });
+    }
+    
+    // ============================================
+    // PANEL CONFIG - Get panel configuration
+    // ============================================
+    if (url.pathname === "/api/panel/config" && request.method === "GET") {
+      return new Response(JSON.stringify({
+        version: PANEL_VERSION,
+        theme: THEME,
+        xray: {
+          running: xrayStatus.running,
+          version: "v26.4.25"
+        },
+        admin_count: ADMINS.length,
+        user_count: await env.VL_DB.prepare("SELECT COUNT(*) as count FROM users").first().then(r => r.count || 0)
+      }), {
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+      });
+    }
+    
+    // ============================================
+    // EXPORT USERS - Export users data
+    // ============================================
+    if (url.pathname === "/api/users/export" && request.method === "GET") {
+      if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+      try {
+        const { results } = await env.VL_DB.prepare("SELECT username, uuid, limit_gb, used_gb, expiry_days, is_active, created_at FROM users ORDER BY id DESC").all();
+        return new Response(JSON.stringify({
+          success: true,
+          users: results,
+          export_date: new Date().toISOString(),
+          total: results.length
+        }), {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+      }
+    }
+    
+    // ============================================
+    // USER STATUS PUBLIC - Public status page data (no auth needed)
+    // ============================================
+    if (url.pathname.startsWith("/api/status/")) {
+      const username = decodeURIComponent(url.pathname.split("/").pop());
+      if (!username) {
+        return new Response(JSON.stringify({ error: "Username required" }), { status: 400 });
+      }
+      try {
+        const user = await env.VL_DB.prepare("SELECT username, uuid, limit_gb, used_gb, expiry_days, created_at, is_active, port FROM users WHERE username = ?").bind(username).first();
+        if (!user) {
+          return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
+        }
+        const now = new Date();
+        const created = new Date(user.created_at);
+        const expiryDate = new Date(created.getTime() + (user.expiry_days || 30) * 24 * 60 * 60 * 1000);
+        const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+        return new Response(JSON.stringify({
+          success: true,
+          username: user.username,
+          is_active: user.is_active === 1,
+          limit_gb: user.limit_gb || 0,
+          used_gb: user.used_gb || 0,
+          expiry_days: user.expiry_days || 30,
+          days_left: daysLeft > 0 ? daysLeft : 0,
+          created_at: user.created_at,
+          expiry_date: expiryDate.toISOString().split('T')[0],
+          is_expired: daysLeft <= 0 || user.is_active === 0,
+          port: user.port || "443"
+        }), {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+      }
     }
     
     return new Response(JSON.stringify({ error: "Not Found" }), { status: 404 });
   }
 };
-
-// ============================================
-// HELPER: GET SETTING
-// ============================================
-async function getSetting(db, key, defaultValue) {
-  try {
-    var row = await db.prepare("SELECT value FROM settings WHERE key = ?").bind(key).first();
-    if (row && row.value !== null && row.value !== undefined) {
-      return row.value;
-    }
-  } catch (e) {}
-  return defaultValue;
-}
-__name(getSetting, "getSetting");
 
 // ============================================
 // DATABASE SERVICE
@@ -1564,7 +1311,7 @@ var DbService = {
   async getPanelPassword(db) {
     if (cachedPanelPassword !== null) return cachedPanelPassword;
     try {
-      var row = await db.prepare("SELECT value FROM settings WHERE key = 'panel_password'").first();
+      const row = await db.prepare("SELECT value FROM settings WHERE key = 'panel_password'").first();
       cachedPanelPassword = row ? row.value : "";
       return cachedPanelPassword || null;
     } catch (e) {
@@ -1576,81 +1323,87 @@ var DbService = {
     cachedPanelPassword = password;
   },
   async verifyApiAuth(request, env) {
-    var cookies = request.headers.get("Cookie") || "";
-    var sessionCookie = cookies.split(";").find(function(c) { return c.trim().startsWith("panel_session="); });
+    const cookies = request.headers.get("Cookie") || "";
+    const sessionCookie = cookies.split(";").find((c) => c.trim().startsWith("panel_session="));
     if (!sessionCookie) return false;
-    var sessionToken = sessionCookie.split("=")[1].trim();
+    const sessionToken = sessionCookie.split("=")[1].trim();
     
+    // Check if it's an admin ID
     await loadAdmins(env);
-    var admin = ADMINS.find(function(a) { return String(a.id) === sessionToken; });
+    const admin = ADMINS.find(a => String(a.id) === sessionToken);
     if (admin) return true;
     
-    var storedHash = await this.getPanelPassword(env.VL_DB);
+    // Check if it's the panel password
+    const storedHash = await this.getPanelPassword(env.VL_DB);
     if (storedHash && sessionToken === storedHash) return true;
     
     return false;
   },
   async sha256(message) {
-    var msgBuffer = new TextEncoder().encode(message);
-    var hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-    var hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
   }
 };
 
 // ============================================
-// SUBSCRIPTION SERVICE
+// SUBSCRIPTION SERVICE (Enhanced - 2 configs with info, rest just username)
 // ============================================
 var SubscriptionService = {
   async generateJson(user, host, env) {
-    var ips = [host];
+    let ips = [host];
     if (user.ips) {
-      var parsedIps = user.ips.split("\n").map(function(ip) { return ip.trim(); }).filter(function(ip) { return ip.length > 0; });
+      const parsedIps = user.ips.split("\n").map((ip) => ip.trim()).filter((ip) => ip.length > 0);
       if (parsedIps.length > 0) ips = parsedIps;
     }
-    var ports = String(user.port || "443").split(",").map(function(p) { return p.trim(); }).filter(function(p) { return p.length > 0; });
-    var fp = user.fingerprint || "chrome";
-    var fragLen = "20-30";
-    var fragInt = "1-2";
+    const ports = String(user.port || "443").split(",").map((p) => p.trim()).filter((p) => p.length > 0);
+    const fp = user.fingerprint || "chrome";
+    let fragLen = "20-30";
+    let fragInt = "1-2";
     try {
-      var rowLen = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'frag_len'").first();
+      const rowLen = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'frag_len'").first();
       if (rowLen && rowLen.value) fragLen = rowLen.value;
-      var rowInt = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'frag_int'").first();
+      const rowInt = await env.VL_DB.prepare("SELECT value FROM settings WHERE key = 'frag_int'").first();
       if (rowInt && rowInt.value) fragInt = rowInt.value;
     } catch (e) {}
     
-    var configArray = [];
-    var now = new Date();
-    var created = new Date(user.created_at);
-    var expiryDate = new Date(created.getTime() + (user.expiry_days || 30) * 24 * 60 * 60 * 1000);
-    var daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
-    var totalGB = user.limit_gb || 0;
-    var usedGB = user.used_gb || 0;
-    var leftGB = Math.max(0, totalGB - usedGB);
-    var expiryDateStr = expiryDate.toISOString().split('T')[0].replace(/-/g, '/');
-    var configName = user.config_name || user.username;
-    var usedFormatted = usedGB >= 1 ? usedGB.toFixed(1) + "GB" : (usedGB * 1024).toFixed(0) + "MB";
-    var totalFormatted = totalGB >= 1 ? totalGB + "GB" : "Unlimited";
+    const configArray = [];
+    const now = new Date();
+    const created = new Date(user.created_at);
+    const expiryDate = new Date(created.getTime() + (user.expiry_days || 30) * 24 * 60 * 60 * 1000);
+    const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+    const totalGB = user.limit_gb || 0;
+    const usedGB = user.used_gb || 0;
+    const leftGB = Math.max(0, totalGB - usedGB);
+    const expiryDateStr = expiryDate.toISOString().split('T')[0].replace(/-/g, '/');
+    const configName = user.config_name || user.username;
+    const usedFormatted = usedGB >= 1 ? usedGB.toFixed(1) + "GB" : (usedGB * 1024).toFixed(0) + "MB";
+    const totalFormatted = totalGB >= 1 ? totalGB + "GB" : "Unlimited";
     
-    var firstIp = ips[0] || host;
-    var firstPort = ports[0] || "443";
-    var isTlsPort = ["443", "2053", "2083", "2087", "2096", "8443"].includes(firstPort);
-    var tlsVal = isTlsPort ? "tls" : "none";
+    // فقط دو کانفیگ اطلاعاتی برای اولین IP و پورت
+    const firstIp = ips[0] || host;
+    const firstPort = ports[0] || "443";
+    const isTlsPort = ["443", "2053", "2083", "2087", "2096", "8443"].includes(firstPort);
+    const tlsVal = isTlsPort ? "tls" : "none";
     
-    var remark1 = "⏳ " + user.username.toUpperCase() + " | 📅 Exp: " + expiryDateStr + " | 🔥 " + daysLeft + " Days Left";
-    var configObj1 = this.buildConfig(user, firstIp, firstPort, tlsVal, host, fp, fragLen, fragInt, remark1);
+    // کانفیگ اطلاعات 1: تاریخ انقضا
+    const remark1 = "⏳ " + user.username.toUpperCase() + " | 📅 Exp: " + expiryDateStr + " | 🔥 " + daysLeft + " Days Left";
+    const configObj1 = this.buildConfig(user, firstIp, firstPort, tlsVal, host, fp, fragLen, fragInt, remark1);
     configArray.push(configObj1);
     
-    var remark2 = "📊 " + user.username.toUpperCase() + " | 💾 " + totalFormatted + " Total | ⚡ " + usedFormatted + " Used";
-    var configObj2 = this.buildConfig(user, firstIp, firstPort, tlsVal, host, fp, fragLen, fragInt, remark2);
+    // کانفیگ اطلاعات 2: حجم مصرفی
+    const remark2 = "📊 " + user.username.toUpperCase() + " | 💾 " + totalFormatted + " Total | ⚡ " + usedFormatted + " Used";
+    const configObj2 = this.buildConfig(user, firstIp, firstPort, tlsVal, host, fp, fragLen, fragInt, remark2);
     configArray.push(configObj2);
     
-    ips.forEach(function(ip) {
-      ports.forEach(function(portStr) {
-        var isTlsPortLoop = ["443", "2053", "2083", "2087", "2096", "8443"].includes(portStr);
-        var tlsValLoop = isTlsPortLoop ? "tls" : "none";
-        var remark3 = configName;
-        var configObj3 = SubscriptionService.buildConfig(user, ip, portStr, tlsValLoop, host, fp, fragLen, fragInt, remark3);
+    // کانفیگ‌های باقی‌مده برای تمام آیپی‌ها و پورت‌ها با اسم کاربر
+    ips.forEach((ip) => {
+      ports.forEach((portStr) => {
+        const isTlsPortLoop = ["443", "2053", "2083", "2087", "2096", "8443"].includes(portStr);
+        const tlsValLoop = isTlsPortLoop ? "tls" : "none";
+        const remark3 = configName;
+        const configObj3 = this.buildConfig(user, ip, portStr, tlsValLoop, host, fp, fragLen, fragInt, remark3);
         configArray.push(configObj3);
       });
     });
@@ -1665,7 +1418,7 @@ var SubscriptionService = {
   },
   
   buildConfig(user, ip, portStr, tlsVal, host, fp, fragLen, fragInt, remark) {
-    var configObj = {
+    const configObj = {
       remarks: remark,
       version: { min: "25.10.15" },
       log: { loglevel: "none" },
@@ -1706,7 +1459,7 @@ var SubscriptionService = {
           },
           ["streamSettings"]: {
             network: "ws",
-            ["wsSettings"]: { host: host, path: "/" },
+            ["wsSettings"]: { host, path: "/" },
             security: tlsVal,
             sockopt: { ["dialerProxy"]: "fragment" }
           },
@@ -1755,50 +1508,54 @@ var SubscriptionService = {
   },
   
   async generateText(user, host) {
-    var ips = [host];
+    let ips = [host];
     if (user.ips) {
-      var parsedIps = user.ips.split("\n").map(function(ip) { return ip.trim(); }).filter(function(ip) { return ip.length > 0; });
+      const parsedIps = user.ips.split("\n").map((ip) => ip.trim()).filter((ip) => ip.length > 0);
       if (parsedIps.length > 0) ips = parsedIps;
     }
-    var ports = String(user.port || "443").split(",").map(function(p) { return p.trim(); }).filter(function(p) { return p.length > 0; });
-    var fp = user.fingerprint || "chrome";
+    const ports = String(user.port || "443").split(",").map((p) => p.trim()).filter((p) => p.length > 0);
+    const fp = user.fingerprint || "chrome";
     
-    var now = new Date();
-    var created = new Date(user.created_at);
-    var expiryDays = user.expiry_days || 30;
-    var expiryDate = new Date(created.getTime() + expiryDays * 24 * 60 * 60 * 1000);
-    var daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
-    var totalGB = user.limit_gb || 0;
-    var usedGB = user.used_gb || 0;
-    var leftGB = Math.max(0, totalGB - usedGB);
-    var expiryDateStr = expiryDate.toISOString().split('T')[0].replace(/-/g, '/');
-    var configName = user.config_name || user.username;
-    var usedFormatted = usedGB >= 1 ? usedGB.toFixed(1) + "GB" : (usedGB * 1024).toFixed(0) + "MB";
-    var totalFormatted = totalGB >= 1 ? totalGB + "GB" : "Unlimited";
+    const now = new Date();
+    const created = new Date(user.created_at);
+    const expiryDays = user.expiry_days || 30;
+    const expiryDate = new Date(created.getTime() + expiryDays * 24 * 60 * 60 * 1000);
+    const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+    const totalGB = user.limit_gb || 0;
+    const usedGB = user.used_gb || 0;
+    const leftGB = Math.max(0, totalGB - usedGB);
+    const expiryDateStr = expiryDate.toISOString().split('T')[0].replace(/-/g, '/');
+    const configName = user.config_name || user.username;
+    const usedFormatted = usedGB >= 1 ? usedGB.toFixed(1) + "GB" : (usedGB * 1024).toFixed(0) + "MB";
+    const totalFormatted = totalGB >= 1 ? totalGB + "GB" : "Unlimited";
     
-    var links = [];
+    const links = [];
     
-    var firstIp = ips[0] || host;
-    var firstPort = ports[0] || "443";
-    var isTlsPort = ["443", "2053", "2083", "2087", "2096", "8443"].includes(firstPort);
-    var tlsVal = isTlsPort ? "tls" : "none";
+    // فقط دو کانفیگ اطلاعاتی برای اولین IP و پورت
+    const firstIp = ips[0] || host;
+    const firstPort = ports[0] || "443";
+    const isTlsPort = ["443", "2053", "2083", "2087", "2096", "8443"].includes(firstPort);
+    const tlsVal = isTlsPort ? "tls" : "none";
     
-    var remark1 = "⏳ " + user.username.toUpperCase() + " | 📅 Exp: " + expiryDateStr + " | 🔥 " + daysLeft + " Days Left";
+    // کانفیگ اطلاعات 1: تاریخ انقضا
+    const remark1 = "⏳ " + user.username.toUpperCase() + " | 📅 Exp: " + expiryDateStr + " | 🔥 " + daysLeft + " Days Left";
     links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + firstIp + ":" + firstPort + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark1));
     
-    var remark2 = "📊 " + user.username.toUpperCase() + " | 💾 " + totalFormatted + " Total | ⚡ " + usedFormatted + " Used";
+    // کانفیگ اطلاعات 2: حجم مصرفی
+    const remark2 = "📊 " + user.username.toUpperCase() + " | 💾 " + totalFormatted + " Total | ⚡ " + usedFormatted + " Used";
     links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + firstIp + ":" + firstPort + "?path=%2F&security=" + tlsVal + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark2));
     
-    ips.forEach(function(ip) {
-      ports.forEach(function(portStr) {
-        var isTlsPortLoop = ["443", "2053", "2083", "2087", "2096", "8443"].includes(portStr);
-        var tlsValLoop = isTlsPortLoop ? "tls" : "none";
-        var remark3 = configName;
+    // کانفیگ‌های باقی‌مده برای تمام آیپی‌ها و پورت‌ها با اسم کاربر
+    ips.forEach((ip) => {
+      ports.forEach((portStr) => {
+        const isTlsPortLoop = ["443", "2053", "2083", "2087", "2096", "8443"].includes(portStr);
+        const tlsValLoop = isTlsPortLoop ? "tls" : "none";
+        const remark3 = configName;
         links.push(atob("dmxlc3M6Ly8=") + user.uuid + "@" + ip + ":" + portStr + "?path=%2F&security=" + tlsValLoop + "&encryption=none&insecure=0&host=" + host + "&fp=" + fp + "&type=ws&allowInsecure=0&sni=" + host + "#" + encodeURIComponent(remark3));
       });
     });
     
-    var header = [
+    const header = [
       "# ==========================================",
       "# VoidLatency Subscription Feed",
       "# User: " + user.username,
@@ -1808,72 +1565,79 @@ var SubscriptionService = {
       ""
     ].join("\n");
     
-    var plainContent = header + links.join("\n");
-    var subContent = btoa(unescape(encodeURIComponent(plainContent)));
-    return subContent;
+    const plainContent = header + links.join("\n");
+    const subContent = btoa(unescape(encodeURIComponent(plainContent)));
+    return new Response(subContent, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store"
+      }
+    });
   }
 };
 
 // ============================================
-// TRAFFIC MANAGEMENT
+// TRAFFIC MANAGEMENT - REAL TRAFFIC
 // ============================================
 async function flushExpiredTraffic(env) {
-  var now = Date.now();
-  for (var [uname, cachedBytes] of GLOBAL_TRAFFIC_CACHE.entries()) {
+  const now = Date.now();
+  for (const [uname, cachedBytes] of GLOBAL_TRAFFIC_CACHE.entries()) {
     if (cachedBytes <= 0) continue;
-    var lastActive = GLOBAL_LAST_ACTIVE_WRITE.get(uname) || 0;
-    var activeCount = ACTIVE_CONNECTIONS_COUNT.get(uname) || 0;
+    const lastActive = GLOBAL_LAST_ACTIVE_WRITE.get(uname) || 0;
+    const activeCount = ACTIVE_CONNECTIONS_COUNT.get(uname) || 0;
     if (activeCount <= 0 || now - lastActive > 65e3) {
       GLOBAL_TRAFFIC_CACHE.set(uname, 0);
-      var deltaGb = cachedBytes / (1024 * 1024 * 1024);
+      const deltaGb = cachedBytes / (1024 * 1024 * 1024);
       try {
         await env.VL_DB.prepare("UPDATE users SET used_gb = used_gb + ? WHERE username = ?").bind(deltaGb, uname).run();
-        var user = await env.VL_DB.prepare("SELECT limit_gb, used_gb FROM users WHERE username = ?").bind(uname).first();
+        // Check if user exceeded limit
+        const user = await env.VL_DB.prepare("SELECT limit_gb, used_gb FROM users WHERE username = ?").bind(uname).first();
         if (user && user.limit_gb && user.used_gb >= user.limit_gb) {
           await env.VL_DB.prepare("UPDATE users SET is_active = 0 WHERE username = ?").bind(uname).run();
         }
       } catch (e) {
-        var recovered = GLOBAL_TRAFFIC_CACHE.get(uname) || 0;
+        let recovered = GLOBAL_TRAFFIC_CACHE.get(uname) || 0;
         GLOBAL_TRAFFIC_CACHE.set(uname, recovered + cachedBytes);
       }
     }
   }
 }
-__name(flushExpiredTraffic, "flushExpiredTraffic");
 
 // ============================================
 // VLESS HANDLER
 // ============================================
-async function handleVLESS(env, storedData, ctx) {
-  var socketPair = new WebSocketPair();
-  var [clientSock, serverSock] = Object.values(socketPair);
+async function handleVLESS(env, storedData = null, ctx = null) {
+  const socketPair = new WebSocketPair();
+  const [clientSock, serverSock] = Object.values(socketPair);
   serverSock.accept();
   serverSock.binaryType = "arraybuffer";
-  var username = null;
-  var tickCount = 0;
-  var validUUID = null;
+  let username = null;
+  let tickCount = 0;
+  let validUUID = null;
   
   function addBytes(bytes) {
     if (bytes <= 0 || !username) return;
-    var current = GLOBAL_TRAFFIC_CACHE.get(username) || 0;
+    let current = GLOBAL_TRAFFIC_CACHE.get(username) || 0;
     current += bytes;
     GLOBAL_LAST_ACTIVE_WRITE.set(username, Date.now());
-    var threshold = 50 * 1024 * 1024;
+    const threshold = 50 * 1024 * 1024;
     if (current >= threshold) {
-      var chunksOf50MB = Math.floor(current / threshold);
-      var bytesToCommit = chunksOf50MB * threshold;
-      var deltaGb = bytesToCommit / (1024 * 1024 * 1024);
-      var leftover = current - bytesToCommit;
+      const chunksOf50MB = Math.floor(current / threshold);
+      const bytesToCommit = chunksOf50MB * threshold;
+      const deltaGb = bytesToCommit / (1024 * 1024 * 1024);
+      const leftover = current - bytesToCommit;
       GLOBAL_TRAFFIC_CACHE.set(username, leftover);
-      var writeTask = async function() {
+      const writeTask = async () => {
         try {
           await env.VL_DB.prepare("UPDATE users SET used_gb = used_gb + ? WHERE username = ?").bind(deltaGb, username).run();
-          var user = await env.VL_DB.prepare("SELECT limit_gb, used_gb FROM users WHERE username = ?").bind(username).first();
+          // Check if user exceeded limit
+          const user = await env.VL_DB.prepare("SELECT limit_gb, used_gb FROM users WHERE username = ?").bind(username).first();
           if (user && user.limit_gb && user.used_gb >= user.limit_gb) {
             await env.VL_DB.prepare("UPDATE users SET is_active = 0 WHERE username = ?").bind(username).run();
           }
         } catch (e) {
-          var recovered = GLOBAL_TRAFFIC_CACHE.get(username) || 0;
+          let recovered = GLOBAL_TRAFFIC_CACHE.get(username) || 0;
           GLOBAL_TRAFFIC_CACHE.set(username, recovered + bytesToCommit);
         }
       };
@@ -1887,25 +1651,25 @@ async function handleVLESS(env, storedData, ctx) {
     }
   }
   
-  var isOfflineSet = false;
-  var setOffline = function() {
+  let isOfflineSet = false;
+  const setOffline = () => {
     if (isOfflineSet) return;
     isOfflineSet = true;
-    var uname = username;
+    const uname = username;
     if (!uname) return;
-    var activeCount = ACTIVE_CONNECTIONS_COUNT.get(uname) || 1;
+    let activeCount = ACTIVE_CONNECTIONS_COUNT.get(uname) || 1;
     activeCount = activeCount - 1;
     if (activeCount <= 0) {
       ACTIVE_CONNECTIONS_COUNT.delete(uname);
-      var cachedBytes = GLOBAL_TRAFFIC_CACHE.get(uname) || 0;
+      let cachedBytes = GLOBAL_TRAFFIC_CACHE.get(uname) || 0;
       if (cachedBytes > 0) {
         GLOBAL_TRAFFIC_CACHE.set(uname, 0);
-        var deltaGb = cachedBytes / (1024 * 1024 * 1024);
-        var writeTask = async function() {
+        const deltaGb = cachedBytes / (1024 * 1024 * 1024);
+        const writeTask = async () => {
           try {
             await env.VL_DB.prepare("UPDATE users SET used_gb = used_gb + ? WHERE username = ?").bind(deltaGb, uname).run();
           } catch (e) {
-            var recovered = GLOBAL_TRAFFIC_CACHE.get(uname) || 0;
+            let recovered = GLOBAL_TRAFFIC_CACHE.get(uname) || 0;
             GLOBAL_TRAFFIC_CACHE.set(uname, recovered + cachedBytes);
           }
         };
@@ -1920,7 +1684,7 @@ async function handleVLESS(env, storedData, ctx) {
     }
   };
   
-  var heartbeat = setInterval(async function() {
+  const heartbeat = setInterval(async () => {
     if (serverSock.readyState === WebSocket.OPEN) {
       try {
         serverSock.send(new Uint8Array(0));
@@ -1928,8 +1692,8 @@ async function handleVLESS(env, storedData, ctx) {
         tickCount++;
         if (tickCount >= 4) {
           tickCount = 0;
-          var user = await env.VL_DB.prepare("SELECT is_active, limit_gb, used_gb, expiry_days, created_at FROM users WHERE uuid = ?").bind(validUUID).first();
-          var isExpired = false;
+          const user = await env.VL_DB.prepare("SELECT is_active, limit_gb, used_gb, expiry_days, created_at FROM users WHERE uuid = ?").bind(validUUID).first();
+          let isExpired = false;
           if (!user || user.is_active === 0) {
             isExpired = true;
           } else {
@@ -1937,9 +1701,9 @@ async function handleVLESS(env, storedData, ctx) {
               isExpired = true;
             }
             if (user.expiry_days && user.created_at) {
-              var created = new Date(user.created_at);
-              var expiryDate = new Date(created.getTime() + user.expiry_days * 24 * 60 * 60 * 1000);
-              if (new Date() > expiryDate) {
+              const created = new Date(user.created_at);
+              const expiryDate = new Date(created.getTime() + user.expiry_days * 24 * 60 * 60 * 1e3);
+              if (/* @__PURE__ */ new Date() > expiryDate) {
                 isExpired = true;
               }
             }
@@ -1950,9 +1714,9 @@ async function handleVLESS(env, storedData, ctx) {
             closeSocketQuietly(serverSock);
             return;
           }
-          var now = Date.now();
-          var lastRecorded = GLOBAL_LAST_ACTIVE_WRITE.get(username) || 0;
-          if (now - lastRecorded > 60000) {
+          const now = Date.now();
+          const lastRecorded = GLOBAL_LAST_ACTIVE_WRITE.get(username) || 0;
+          if (now - lastRecorded > 6e4) {
             GLOBAL_LAST_ACTIVE_WRITE.set(username, now);
             await env.VL_DB.prepare("UPDATE users SET last_active = ? WHERE username = ?").bind(now, username).run();
           }
@@ -1961,20 +1725,20 @@ async function handleVLESS(env, storedData, ctx) {
     } else {
       clearInterval(heartbeat);
     }
-  }, 15000);
+  }, 15e3);
   
-  var remoteConnWrapper = { socket: null, connectingPromise: null, retryConnect: null };
-  var reqUUID = null;
-  var isHeaderParsed = false;
-  var isDnsQuery = false;
-  var chunkBuffer = new Uint8Array(0);
-  var proxyIP = storedData?.proxy_ip || "proxyip.cmliussss.net";
-  var wsChain = Promise.resolve();
-  var wsStopped = false, wsFailed = false, wsFinished = false;
-  var wsQueueBytes = 0, wsQueueItems = 0;
-  var currentSocketWriter = null, activeRemoteWriter = null;
+  let remoteConnWrapper = { socket: null, connectingPromise: null, retryConnect: null };
+  let reqUUID = null;
+  let isHeaderParsed = false;
+  let isDnsQuery = false;
+  let chunkBuffer = new Uint8Array(0);
+  const proxyIP = storedData?.proxy_ip || "proxyip.cmliussss.net";
+  let wsChain = Promise.resolve();
+  let wsStopped = false, wsFailed = false, wsFinished = false;
+  let wsQueueBytes = 0, wsQueueItems = 0;
+  let currentSocketWriter = null, activeRemoteWriter = null;
   
-  var releaseRemoteWriter = function() {
+  const releaseRemoteWriter = () => {
     if (activeRemoteWriter) {
       try {
         activeRemoteWriter.releaseLock();
@@ -1984,8 +1748,8 @@ async function handleVLESS(env, storedData, ctx) {
     currentSocketWriter = null;
   };
   
-  var getRemoteWriter = function() {
-    var s = remoteConnWrapper.socket;
+  const getRemoteWriter = () => {
+    const s = remoteConnWrapper.socket;
     if (!s) return null;
     if (s !== currentSocketWriter) {
       releaseRemoteWriter();
@@ -1995,15 +1759,15 @@ async function handleVLESS(env, storedData, ctx) {
     return activeRemoteWriter;
   };
   
-  var upstreamQueue = createUpstreamQueue({
+  const upstreamQueue = createUpstreamQueue({
     getWriter: getRemoteWriter,
     releaseWriter: releaseRemoteWriter,
-    retryConnect: async function() {
+    retryConnect: async () => {
       if (typeof remoteConnWrapper.retryConnect === "function") {
         await remoteConnWrapper.retryConnect();
       }
     },
-    closeConnection: function() {
+    closeConnection: () => {
       try {
         remoteConnWrapper.socket?.close();
       } catch (e) {}
@@ -2012,12 +1776,12 @@ async function handleVLESS(env, storedData, ctx) {
     name: "VlessWSQueue"
   });
   
-  var writeToRemote = async function(chunk, allowRetry) {
+  const writeToRemote = async (chunk, allowRetry = true) => {
     return upstreamQueue.writeAndAwait(chunk, allowRetry);
   };
   
-  var processWsMessage = async function(chunk) {
-    var bytes = chunk.byteLength || 0;
+  const processWsMessage = async (chunk) => {
+    const bytes = chunk.byteLength || 0;
     await addBytes(bytes);
     if (isDnsQuery) {
       await forwardVlessUDP(chunk, serverSock, null);
@@ -2032,7 +1796,7 @@ async function handleVLESS(env, storedData, ctx) {
         serverSock.close();
         return;
       }
-      var user = null;
+      let user = null;
       try {
         user = await env.VL_DB.prepare("SELECT * FROM users WHERE uuid = ?").bind(reqUUID).first();
       } catch (e) {}
@@ -2045,9 +1809,9 @@ async function handleVLESS(env, storedData, ctx) {
         return;
       }
       if (user.expiry_days && user.created_at) {
-        var created = new Date(user.created_at);
-        var expiryDate = new Date(created.getTime() + user.expiry_days * 24 * 60 * 60 * 1000);
-        if (new Date() > expiryDate) {
+        const created = new Date(user.created_at);
+        const expiryDate = new Date(created.getTime() + user.expiry_days * 24 * 60 * 60 * 1e3);
+        if (/* @__PURE__ */ new Date() > expiryDate) {
           try {
             await env.VL_DB.prepare("UPDATE users SET is_active = 0, last_active = 0 WHERE uuid = ?").bind(reqUUID).run();
           } catch (e) {}
@@ -2058,12 +1822,12 @@ async function handleVLESS(env, storedData, ctx) {
       validUUID = reqUUID;
       username = user.username;
       isHeaderParsed = true;
-      var activeCount = ACTIVE_CONNECTIONS_COUNT.get(username) || 0;
+      let activeCount = ACTIVE_CONNECTIONS_COUNT.get(username) || 0;
       ACTIVE_CONNECTIONS_COUNT.set(username, activeCount + 1);
       if (activeCount === 0) {
-        var setOnlineTask = async function() {
+        const setOnlineTask = async () => {
           try {
-            var now = Date.now();
+            const now = Date.now();
             GLOBAL_LAST_ACTIVE_WRITE.set(username, now);
             await env.VL_DB.prepare("UPDATE users SET last_active = ? WHERE username = ?").bind(now, username).run();
           } catch (e) {}
@@ -2072,25 +1836,25 @@ async function handleVLESS(env, storedData, ctx) {
         else setOnlineTask();
       }
       try {
-        var offset = 17;
-        var optLen = chunkBuffer[offset++];
+        let offset = 17;
+        const optLen = chunkBuffer[offset++];
         offset += optLen;
-        var cmd = chunkBuffer[offset++];
-        var port = chunkBuffer[offset++] << 8 | chunkBuffer[offset++];
-        var addrType = chunkBuffer[offset++];
-        var addr = "";
+        const cmd = chunkBuffer[offset++];
+        const port = chunkBuffer[offset++] << 8 | chunkBuffer[offset++];
+        const addrType = chunkBuffer[offset++];
+        let addr = "";
         if (addrType === 1) {
           addr = chunkBuffer[offset++] + "." + chunkBuffer[offset++] + "." + chunkBuffer[offset++] + "." + chunkBuffer[offset++];
         } else if (addrType === 2) {
-          var domainLen = chunkBuffer[offset++];
+          const domainLen = chunkBuffer[offset++];
           addr = new TextDecoder().decode(chunkBuffer.slice(offset, offset + domainLen));
           offset += domainLen;
         } else if (addrType === 3) {
           offset += 16;
           addr = "ipv6-unsupported";
         }
-        var rawData = chunkBuffer.slice(offset);
-        var respHeader = new Uint8Array([chunkBuffer[0], 0]);
+        const rawData = chunkBuffer.slice(offset);
+        const respHeader = new Uint8Array([chunkBuffer[0], 0]);
         if (cmd === 2) {
           if (port === 53) {
             isDnsQuery = true;
@@ -2100,13 +1864,13 @@ async function handleVLESS(env, storedData, ctx) {
           }
           return;
         }
-        var connectTCP = async function(dataPayload, useFallback) {
+        const connectTCP = async (dataPayload = null, useFallback = true) => {
           if (remoteConnWrapper.connectingPromise) {
             await remoteConnWrapper.connectingPromise;
             return;
           }
-          var task = (async function() {
-            var s = null;
+          const task = (async () => {
+            let s = null;
             try {
               s = await connectDirect(addr, port, dataPayload);
             } catch (err) {
@@ -2117,8 +1881,8 @@ async function handleVLESS(env, storedData, ctx) {
               }
             }
             remoteConnWrapper.socket = s;
-            s.closed.catch(function() {}).finally(function() { return closeSocketQuietly(serverSock); });
-            connectStreams(s, serverSock, respHeader, null, function(b) {
+            s.closed.catch(() => {}).finally(() => closeSocketQuietly(serverSock));
+            connectStreams(s, serverSock, respHeader, null, (b) => {
               addBytes(b);
             });
           })();
@@ -2131,7 +1895,7 @@ async function handleVLESS(env, storedData, ctx) {
             }
           }
         };
-        remoteConnWrapper.retryConnect = async function() { return connectTCP(null, false); };
+        remoteConnWrapper.retryConnect = async () => connectTCP(null, false);
         await connectTCP(rawData, true);
       } catch (e) {
         serverSock.close();
@@ -2139,7 +1903,7 @@ async function handleVLESS(env, storedData, ctx) {
     }
   };
   
-  var handleWsError = function(err) {
+  const handleWsError = (err) => {
     if (wsFailed) return;
     wsFailed = true;
     wsStopped = true;
@@ -2151,22 +1915,22 @@ async function handleVLESS(env, storedData, ctx) {
     setOffline();
   };
   
-  var pushToChain = function(task) {
+  const pushToChain = (task) => {
     wsChain = wsChain.then(task).catch(handleWsError);
   };
   
-  serverSock.addEventListener("message", function(event) {
+  serverSock.addEventListener("message", (event) => {
     if (wsStopped || wsFailed) return;
-    var size = event.data.byteLength || 0;
-    var nextBytes = wsQueueBytes + size;
-    var nextItems = wsQueueItems + 1;
+    const size = event.data.byteLength || 0;
+    const nextBytes = wsQueueBytes + size;
+    const nextItems = wsQueueItems + 1;
     if (nextBytes > UPSTREAM_QUEUE_MAX_BYTES || nextItems > UPSTREAM_QUEUE_MAX_ITEMS) {
       handleWsError(new Error("ws queue overflow"));
       return;
     }
     wsQueueBytes = nextBytes;
     wsQueueItems = nextItems;
-    pushToChain(async function() {
+    pushToChain(async () => {
       wsQueueBytes = Math.max(0, wsQueueBytes - size);
       wsQueueItems = Math.max(0, wsQueueItems - 1);
       if (wsFailed) return;
@@ -2174,45 +1938,42 @@ async function handleVLESS(env, storedData, ctx) {
     });
   });
   
-  serverSock.addEventListener("close", function() {
+  serverSock.addEventListener("close", () => {
     clearInterval(heartbeat);
     closeSocketQuietly(serverSock);
     setOffline();
     if (wsFinished) return;
     wsFinished = true;
     wsStopped = true;
-    pushToChain(async function() {
+    pushToChain(async () => {
       if (wsFailed) return;
       await upstreamQueue.awaitEmpty();
       releaseRemoteWriter();
     });
   });
   
-  serverSock.addEventListener("error", function(err) {
+  serverSock.addEventListener("error", (err) => {
     handleWsError(err);
   });
   
   return new Response(null, { status: 101, webSocket: clientSock });
 }
-__name(handleVLESS, "handleVLESS");
 
 // ============================================
 // NETWORK UTILITIES
 // ============================================
 function isIPv4(value) {
-  var parts = String(value || "").split(".");
-  return parts.length === 4 && parts.every(function(part) { return /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255; });
+  const parts = String(value || "").split(".");
+  return parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255);
 }
-__name(isIPv4, "isIPv4");
 
-function stripIPv6Brackets(hostname) {
-  var host = String(hostname || "").trim();
+function stripIPv6Brackets(hostname = "") {
+  const host = String(hostname || "").trim();
   return host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
 }
-__name(stripIPv6Brackets, "stripIPv6Brackets");
 
-function isIPHostname(hostname) {
-  var host = stripIPv6Brackets(hostname);
+function isIPHostname(hostname = "") {
+  const host = stripIPv6Brackets(hostname);
   if (isIPv4(host)) return true;
   if (!host.includes(":")) return false;
   try {
@@ -2222,7 +1983,6 @@ function isIPHostname(hostname) {
     return false;
   }
 }
-__name(isIPHostname, "isIPHostname");
 
 function convertToUint8Array(data) {
   if (data instanceof Uint8Array) return data;
@@ -2230,21 +1990,18 @@ function convertToUint8Array(data) {
   if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   return new Uint8Array(data || 0);
 }
-__name(convertToUint8Array, "convertToUint8Array");
 
-function concatBytes() {
-  var chunkList = Array.prototype.slice.call(arguments);
-  var chunks = chunkList.map(convertToUint8Array);
-  var total = chunks.reduce(function(sum, c) { return sum + c.byteLength; }, 0);
-  var result = new Uint8Array(total);
-  var offset = 0;
-  for (var i = 0; i < chunks.length; i++) {
-    result.set(chunks[i], offset);
-    offset += chunks[i].byteLength;
+function concatBytes(...chunkList) {
+  const chunks = chunkList.map(convertToUint8Array);
+  const total = chunks.reduce((sum, c) => sum + c.byteLength, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    result.set(c, offset);
+    offset += c.byteLength;
   }
   return result;
 }
-__name(concatBytes, "concatBytes");
 
 function closeSocketQuietly(socket) {
   try {
@@ -2253,41 +2010,40 @@ function closeSocketQuietly(socket) {
     }
   } catch (e) {}
 }
-__name(closeSocketQuietly, "closeSocketQuietly");
 
 // ============================================
 // DNS UTILITIES
 // ============================================
 async function dohQuery(domain, recordType) {
-  var cacheKey = domain + ":" + recordType;
+  const cacheKey = domain + ":" + recordType;
   if (DNS_CACHE.has(cacheKey)) {
-    var cached = DNS_CACHE.get(cacheKey);
+    const cached = DNS_CACHE.get(cacheKey);
     if (Date.now() < cached.expires) return cached.data;
     DNS_CACHE.delete(cacheKey);
   }
   try {
-    var typeMap = { "A": 1, "AAAA": 28 };
-    var qtype = typeMap[recordType.toUpperCase()] || 1;
-    var encodeDomain = function(name) {
-      var parts = name.endsWith(".") ? name.slice(0, -1).split(".") : name.split(".");
-      var bufs = [];
-      for (var i = 0; i < parts.length; i++) {
-        var enc = new TextEncoder().encode(parts[i]);
+    const typeMap = { "A": 1, "AAAA": 28 };
+    const qtype = typeMap[recordType.toUpperCase()] || 1;
+    const encodeDomain = (name) => {
+      const parts = name.endsWith(".") ? name.slice(0, -1).split(".") : name.split(".");
+      const bufs = [];
+      for (const label of parts) {
+        const enc = new TextEncoder().encode(label);
         bufs.push(new Uint8Array([enc.length]), enc);
       }
       bufs.push(new Uint8Array([0]));
-      return concatBytes.apply(null, bufs);
+      return concatBytes(...bufs);
     };
-    var qname = encodeDomain(domain);
-    var query = new Uint8Array(12 + qname.length + 4);
-    var qview = new DataView(query.buffer);
+    const qname = encodeDomain(domain);
+    const query = new Uint8Array(12 + qname.length + 4);
+    const qview = new DataView(query.buffer);
     qview.setUint16(0, crypto.getRandomValues(new Uint16Array(1))[0]);
     qview.setUint16(2, 256);
     qview.setUint16(4, 1);
     query.set(qname, 12);
     qview.setUint16(12 + qname.length, qtype);
     qview.setUint16(12 + qname.length + 2, 1);
-    var response = await fetch(DOH_RESOLVER, {
+    const response = await fetch(DOH_RESOLVER, {
       method: "POST",
       headers: {
         "Content-Type": "application/dns-message",
@@ -2296,15 +2052,15 @@ async function dohQuery(domain, recordType) {
       body: query
     });
     if (!response.ok) return [];
-    var buf = new Uint8Array(await response.arrayBuffer());
-    var dv = new DataView(buf.buffer);
-    var qdcount = dv.getUint16(4);
-    var ancount = dv.getUint16(6);
-    var parseName = function(pos) {
-      var labels = [];
-      var p = pos, jumped = false, endPos = -1, safe = 128;
+    const buf = new Uint8Array(await response.arrayBuffer());
+    const dv = new DataView(buf.buffer);
+    const qdcount = dv.getUint16(4);
+    const ancount = dv.getUint16(6);
+    const parseName = (pos) => {
+      const labels = [];
+      let p = pos, jumped = false, endPos = -1, safe = 128;
       while (p < buf.length && safe-- > 0) {
-        var len = buf[p];
+        const len = buf[p];
         if (len === 0) {
           if (!jumped) endPos = p + 1;
           break;
@@ -2321,35 +2077,35 @@ async function dohQuery(domain, recordType) {
       if (endPos === -1) endPos = p + 1;
       return [labels.join("."), endPos];
     };
-    var offset = 12;
-    for (var i = 0; i < qdcount; i++) {
-      var [, end] = parseName(offset);
+    let offset = 12;
+    for (let i = 0; i < qdcount; i++) {
+      const [, end] = parseName(offset);
       offset = Number(end) + 4;
     }
-    var answers = [];
-    for (var i = 0; i < ancount && offset < buf.length; i++) {
-      var [name, nameEnd] = parseName(offset);
+    const answers = [];
+    for (let i = 0; i < ancount && offset < buf.length; i++) {
+      const [name, nameEnd] = parseName(offset);
       offset = Number(nameEnd);
-      var type = dv.getUint16(offset);
+      const type = dv.getUint16(offset);
       offset += 2;
       offset += 2;
-      var ttl = dv.getUint32(offset);
+      const ttl = dv.getUint32(offset);
       offset += 4;
-      var rdlen = dv.getUint16(offset);
+      const rdlen = dv.getUint16(offset);
       offset += 2;
-      var rdata = buf.slice(offset, offset + rdlen);
+      const rdata = buf.slice(offset, offset + rdlen);
       offset += rdlen;
-      var data;
+      let data;
       if (type === 1 && rdlen === 4) {
         data = rdata[0] + "." + rdata[1] + "." + rdata[2] + "." + rdata[3];
       } else if (type === 28 && rdlen === 16) {
-        var segs = [];
-        for (var j = 0; j < 16; j += 2) segs.push((rdata[j] << 8 | rdata[j + 1]).toString(16));
+        const segs = [];
+        for (let j = 0; j < 16; j += 2) segs.push((rdata[j] << 8 | rdata[j + 1]).toString(16));
         data = segs.join(":");
       } else {
-        data = Array.from(rdata).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
+        data = Array.from(rdata).map((b) => b.toString(16).padStart(2, "0")).join("");
       }
-      answers.push({ name: name, type: type, TTL: ttl, data: data });
+      answers.push({ name, type, TTL: ttl, data });
     }
     DNS_CACHE.set(cacheKey, { data: answers, expires: Date.now() + DNS_CACHE_TTL });
     return answers;
@@ -2357,26 +2113,23 @@ async function dohQuery(domain, recordType) {
     return [];
   }
 }
-__name(dohQuery, "dohQuery");
 
 // ============================================
 // UPSTREAM QUEUE
 // ============================================
-function createUpstreamQueue(_0) {
-  var { getWriter, releaseWriter, retryConnect, closeConnection, name = "UpstreamQueue" } = _0;
-  var chunks = [];
-  var head = 0;
-  var queuedBytes = 0;
-  var draining = false;
-  var closed = false;
-  var bundleBuffer = null;
-  var idleResolvers = [];
-  var activeCompletions = null;
+function createUpstreamQueue({ getWriter, releaseWriter, retryConnect, closeConnection, name = "UpstreamQueue" }) {
+  let chunks = [];
+  let head = 0;
+  let queuedBytes = 0;
+  let draining = false;
+  let closed = false;
+  let bundleBuffer = null;
+  let idleResolvers = [];
+  let activeCompletions = null;
   
-  var settleCompletions = function(completions, err) {
+  const settleCompletions = (completions, err = null) => {
     if (!completions) return;
-    for (var i = 0; i < completions.length; i++) {
-      var comp = completions[i];
+    for (const comp of completions) {
       if (comp) {
         if (err) comp.reject(err);
         else comp.resolve();
@@ -2384,31 +2137,29 @@ function createUpstreamQueue(_0) {
     }
   };
   
-  var rejectQueued = function(err) {
-    for (var i = head; i < chunks.length; i++) {
-      var item = chunks[i];
+  const rejectQueued = (err) => {
+    for (let i = head; i < chunks.length; i++) {
+      const item = chunks[i];
       if (item && item.completions) settleCompletions(item.completions, err);
     }
   };
   
-  var compact = function() {
+  const compact = () => {
     if (head > 32 && head * 2 >= chunks.length) {
       chunks = chunks.slice(head);
       head = 0;
     }
   };
   
-  var resolveIdle = function() {
+  const resolveIdle = () => {
     if (queuedBytes || draining || !idleResolvers.length) return;
-    var resolvers = idleResolvers;
+    const resolvers = idleResolvers;
     idleResolvers = [];
-    for (var i = 0; i < resolvers.length; i++) {
-      resolvers[i]();
-    }
+    for (const resolve of resolvers) resolve();
   };
   
-  var clear = function(err) {
-    var closeErr = err || (closed ? new Error(name + ": queue closed") : null);
+  const clear = (err = null) => {
+    const closeErr = err || (closed ? new Error(name + ": queue closed") : null);
     if (closeErr) {
       rejectQueued(closeErr);
       settleCompletions(activeCompletions, closeErr);
@@ -2420,26 +2171,26 @@ function createUpstreamQueue(_0) {
     resolveIdle();
   };
   
-  var shift = function() {
+  const shift = () => {
     if (head >= chunks.length) return null;
-    var item = chunks[head];
+    const item = chunks[head];
     chunks[head++] = void 0;
     queuedBytes -= item.chunk.byteLength;
     compact();
     return item;
   };
   
-  var bundle = function() {
-    var first = shift();
+  const bundle = () => {
+    const first = shift();
     if (!first) return null;
     if (head >= chunks.length || first.chunk.byteLength >= UPSTREAM_BUNDLE_TARGET_BYTES) return first;
-    var byteLength = first.chunk.byteLength;
-    var end = head;
-    var allowRetry = first.allowRetry;
-    var completions = first.completions || null;
+    let byteLength = first.chunk.byteLength;
+    let end = head;
+    let allowRetry = first.allowRetry;
+    let completions = first.completions || null;
     while (end < chunks.length) {
-      var next = chunks[end];
-      var nextLength = byteLength + next.chunk.byteLength;
+      const next = chunks[end];
+      const nextLength = byteLength + next.chunk.byteLength;
       if (nextLength > UPSTREAM_BUNDLE_TARGET_BYTES) break;
       byteLength = nextLength;
       allowRetry = allowRetry && next.allowRetry;
@@ -2447,31 +2198,31 @@ function createUpstreamQueue(_0) {
       end++;
     }
     if (end === head) return first;
-    var output = bundleBuffer ||= new Uint8Array(UPSTREAM_BUNDLE_TARGET_BYTES);
+    const output = bundleBuffer ||= new Uint8Array(UPSTREAM_BUNDLE_TARGET_BYTES);
     output.set(first.chunk);
-    var offset = first.chunk.byteLength;
+    let offset = first.chunk.byteLength;
     while (head < end) {
-      var next = chunks[head];
+      const next = chunks[head];
       chunks[head++] = void 0;
       queuedBytes -= next.chunk.byteLength;
       output.set(next.chunk, offset);
       offset += next.chunk.byteLength;
     }
     compact();
-    return { chunk: output.subarray(0, byteLength), allowRetry: allowRetry, completions: completions };
+    return { chunk: output.subarray(0, byteLength), allowRetry, completions };
   };
   
-  var drain = async function() {
+  const drain = async () => {
     if (draining || closed) return;
     draining = true;
     try {
-      while (true) {
+      for (; ; ) {
         if (closed) break;
-        var item = bundle();
+        const item = bundle();
         if (!item) break;
-        var writer = getWriter();
+        let writer = getWriter();
         if (!writer) throw new Error(name + ": remote writer unavailable");
-        var completions = item.completions || null;
+        const completions = item.completions || null;
         activeCompletions = completions;
         try {
           try {
@@ -2505,113 +2256,112 @@ function createUpstreamQueue(_0) {
     }
   };
   
-  var enqueue = function(data, allowRetry, waitForFlush) {
+  const enqueue = (data, allowRetry = true, waitForFlush = false) => {
     if (closed) return false;
     if (!getWriter()) return false;
-    var chunk = convertToUint8Array(data);
+    const chunk = convertToUint8Array(data);
     if (!chunk.byteLength) return true;
-    var nextBytes = queuedBytes + chunk.byteLength;
-    var nextItems = chunks.length - head + 1;
+    const nextBytes = queuedBytes + chunk.byteLength;
+    const nextItems = chunks.length - head + 1;
     if (nextBytes > UPSTREAM_QUEUE_MAX_BYTES || nextItems > UPSTREAM_QUEUE_MAX_ITEMS) {
       closed = true;
-      var err = Object.assign(new Error(name + ": upload queue overflow (" + nextBytes + "B/" + nextItems + ")"), { isQueueOverflow: true });
+      const err = Object.assign(new Error(name + ": upload queue overflow (" + nextBytes + "B/" + nextItems + ")"), { isQueueOverflow: true });
       clear(err);
       try {
         closeConnection?.(err);
       } catch (_) {}
       throw err;
     }
-    var completionPromise = null;
-    var completions = null;
+    let completionPromise = null;
+    let completions = null;
     if (waitForFlush) {
       completions = [];
-      completionPromise = new Promise(function(resolve, reject) { completions.push({ resolve: resolve, reject: reject }); });
+      completionPromise = new Promise((resolve, reject) => completions.push({ resolve, reject }));
     }
-    chunks.push({ chunk: chunk, allowRetry: allowRetry, completions: completions });
+    chunks.push({ chunk, allowRetry, completions });
     queuedBytes = nextBytes;
     if (!draining) queueMicrotask(drain);
-    return waitForFlush ? completionPromise.then(function() { return true; }) : true;
+    return waitForFlush ? completionPromise.then(() => true) : true;
   };
   
   return {
-    writeAndAwait: function(data, allowRetry) {
+    writeAndAwait(data, allowRetry = true) {
       return enqueue(data, allowRetry, true);
     },
-    awaitEmpty: async function() {
+    async awaitEmpty() {
       if (!queuedBytes && !draining) return;
-      await new Promise(function(resolve) { idleResolvers.push(resolve); });
+      await new Promise((resolve) => idleResolvers.push(resolve));
     },
-    clear: function() {
+    clear() {
       closed = true;
       clear();
     }
   };
 }
-__name(createUpstreamQueue, "createUpstreamQueue");
 
 // ============================================
 // DOWNSTREAM SENDER
 // ============================================
-function createDownstreamSender(webSocket, headerData) {
-  var packetCap = DOWNSTREAM_GRAIN_BYTES;
-  var tailBytes = DOWNSTREAM_GRAIN_TAIL_THRESHOLD;
-  var lowWaterBytes = Math.max(4096, tailBytes << 3);
-  var header = headerData;
-  var pendingBuffer = new Uint8Array(packetCap);
-  var pendingBytes = 0;
-  var flushTimer = null;
-  var microtaskQueued = false;
-  var generation = 0;
-  var scheduledGeneration = 0;
-  var waitRounds = 0;
-  var flushPromise = null;
+function createDownstreamSender(webSocket, headerData = null) {
+  const packetCap = DOWNSTREAM_GRAIN_BYTES;
+  const tailBytes = DOWNSTREAM_GRAIN_TAIL_THRESHOLD;
+  const lowWaterBytes = Math.max(4096, tailBytes << 3);
+  let header = headerData;
+  let pendingBuffer = new Uint8Array(packetCap);
+  let pendingBytes = 0;
+  let flushTimer = null;
+  let microtaskQueued = false;
+  let generation = 0;
+  let scheduledGeneration = 0;
+  let waitRounds = 0;
+  let flushPromise = null;
   
-  var sendRawChunk = async function(chunk) {
+  const sendRawChunk = async (chunk) => {
     if (webSocket.readyState !== WebSocket.OPEN) throw new Error("ws.readyState is not open");
     webSocket.send(chunk);
   };
   
-  var attachResponseHeader = function(chunk) {
+  const attachResponseHeader = (chunk) => {
     if (!header) return chunk;
-    var merged = new Uint8Array(header.length + chunk.byteLength);
+    const merged = new Uint8Array(header.length + chunk.byteLength);
     merged.set(header, 0);
     merged.set(chunk, header.length);
     header = null;
     return merged;
   };
   
-  var flush = async function() {
+  const flush = async () => {
     while (flushPromise) await flushPromise;
     if (flushTimer) clearTimeout(flushTimer);
     flushTimer = null;
     microtaskQueued = false;
     if (!pendingBytes) return;
-    var output = pendingBuffer.subarray(0, pendingBytes).slice();
+    const output = pendingBuffer.subarray(0, pendingBytes).slice();
     pendingBuffer = new Uint8Array(packetCap);
     pendingBytes = 0;
     waitRounds = 0;
-    flushPromise = sendRawChunk(output).finally(function() {
+    flushPromise = sendRawChunk(output).finally(() => {
       flushPromise = null;
     });
     return flushPromise;
   };
   
-  var scheduleFlush = function() {
+  const scheduleFlush = () => {
     if (flushTimer || microtaskQueued) return;
     microtaskQueued = true;
     scheduledGeneration = generation;
-    queueMicrotask(function() {
+    queueMicrotask(() => {
       microtaskQueued = false;
       if (!pendingBytes || flushTimer) return;
       if (packetCap - pendingBytes < tailBytes) {
-        flush().catch(function() { return closeSocketQuietly(webSocket); });
+        flush().catch(() => closeSocketQuietly(webSocket));
         return;
       }
-      flushTimer = setTimeout(function() {
+      flushTimer = setTimeout(() => {
         flushTimer = null;
         if (!pendingBytes) return;
         if (packetCap - pendingBytes < tailBytes) {
-          flush().catch(function() { return closeSocketQuietly(webSocket); });
+          flush().catch(() => closeSocketQuietly(webSocket));
           return;
         }
         if (waitRounds < 2 && (generation !== scheduledGeneration || pendingBytes < lowWaterBytes)) {
@@ -2620,33 +2370,33 @@ function createDownstreamSender(webSocket, headerData) {
           scheduleFlush();
           return;
         }
-        flush().catch(function() { return closeSocketQuietly(webSocket); });
+        flush().catch(() => closeSocketQuietly(webSocket));
       }, Math.max(DOWNSTREAM_GRAIN_SILENT_MS, 1));
     });
   };
   
   return {
-    sendDirect: async function(data) {
-      var chunk = convertToUint8Array(data);
+    async sendDirect(data) {
+      let chunk = convertToUint8Array(data);
       if (!chunk.byteLength) return;
       chunk = attachResponseHeader(chunk);
       await sendRawChunk(chunk);
     },
-    send: async function(data) {
-      var chunk = convertToUint8Array(data);
+    async send(data) {
+      let chunk = convertToUint8Array(data);
       if (!chunk.byteLength) return;
       chunk = attachResponseHeader(chunk);
-      var offset = 0;
-      var totalBytes = chunk.byteLength;
+      let offset = 0;
+      const totalBytes = chunk.byteLength;
       while (offset < totalBytes) {
         if (!pendingBytes && totalBytes - offset >= packetCap) {
-          var sendBytes = Math.min(packetCap, totalBytes - offset);
-          var view = offset || sendBytes !== totalBytes ? chunk.subarray(offset, offset + sendBytes) : chunk;
+          const sendBytes = Math.min(packetCap, totalBytes - offset);
+          const view = offset || sendBytes !== totalBytes ? chunk.subarray(offset, offset + sendBytes) : chunk;
           await sendRawChunk(view);
           offset += sendBytes;
           continue;
         }
-        var copyBytes = Math.min(packetCap - pendingBytes, totalBytes - offset);
+        const copyBytes = Math.min(packetCap - pendingBytes, totalBytes - offset);
         pendingBuffer.set(chunk.subarray(offset, offset + copyBytes), pendingBytes);
         pendingBytes += copyBytes;
         offset += copyBytes;
@@ -2655,24 +2405,22 @@ function createDownstreamSender(webSocket, headerData) {
         else scheduleFlush();
       }
     },
-    flush: flush
+    flush
   };
 }
-__name(createDownstreamSender, "createDownstreamSender");
 
 async function waitForBackpressure(ws) {
   if (typeof ws.bufferedAmount === "number") {
     while (ws.bufferedAmount > 256 * 1024) {
-      await new Promise(function(r) { return setTimeout(r, 100); });
+      await new Promise((r) => setTimeout(r, 100));
     }
   }
 }
-__name(waitForBackpressure, "waitForBackpressure");
 
 async function connectStreams(remoteSocket, webSocket, headerData, retryFunc, onBytes) {
-  var header = headerData, hasData = false, reader, useBYOB = false;
-  var BYOB_LIMIT = 64 * 1024;
-  var downstreamSender = createDownstreamSender(webSocket, header);
+  let header = headerData, hasData = false, reader, useBYOB = false;
+  const BYOB_LIMIT = 64 * 1024;
+  const downstreamSender = createDownstreamSender(webSocket, header);
   header = null;
   try {
     reader = remoteSocket.readable.getReader({ mode: "byob" });
@@ -2684,7 +2432,7 @@ async function connectStreams(remoteSocket, webSocket, headerData, retryFunc, on
     if (!useBYOB) {
       while (true) {
         await waitForBackpressure(webSocket);
-        var { done, value } = await reader.read();
+        const { done, value } = await reader.read();
         if (done) break;
         if (!value || value.byteLength === 0) continue;
         hasData = true;
@@ -2692,10 +2440,10 @@ async function connectStreams(remoteSocket, webSocket, headerData, retryFunc, on
         await downstreamSender.send(value);
       }
     } else {
-      var readBuffer = new ArrayBuffer(BYOB_LIMIT);
+      let readBuffer = new ArrayBuffer(BYOB_LIMIT);
       while (true) {
         await waitForBackpressure(webSocket);
-        var { done, value } = await reader.read(new Uint8Array(readBuffer, 0, BYOB_LIMIT));
+        const { done, value } = await reader.read(new Uint8Array(readBuffer, 0, BYOB_LIMIT));
         if (done) break;
         if (!value || value.byteLength === 0) continue;
         hasData = true;
@@ -2723,90 +2471,84 @@ async function connectStreams(remoteSocket, webSocket, headerData, retryFunc, on
   }
   if (!hasData && retryFunc) await retryFunc();
 }
-__name(connectStreams, "connectStreams");
 
 async function buildRaceCandidates(address, port) {
   if (!PRELOAD_RACE_DIAL || isIPHostname(address)) return null;
-  var [aRecords, aaaaRecords] = await Promise.all([
+  const [aRecords, aaaaRecords] = await Promise.all([
     dohQuery(address, "A"),
     dohQuery(address, "AAAA")
   ]);
-  var ipv4List = [].concat.apply([], aRecords.flatMap(function(r) {
+  const ipv4List = [...new Set(aRecords.flatMap((r) => {
     return r.type === 1 && typeof r.data === "string" && isIPv4(r.data) ? [r.data] : [];
-  }));
-  ipv4List = Array.from(new Set(ipv4List));
-  var ipv6List = [].concat.apply([], aaaaRecords.flatMap(function(r) {
+  }))];
+  const ipv6List = [...new Set(aaaaRecords.flatMap((r) => {
     return r.type === 28 && typeof r.data === "string" && isIPHostname(r.data) ? [r.data] : [];
-  }));
-  ipv6List = Array.from(new Set(ipv6List));
-  var limit = Math.max(1, TCP_CONCURRENCY | 0);
-  var ipList = ipv4List.length >= limit ? ipv4List.slice(0, limit) : ipv4List.concat(ipv6List.slice(0, limit - ipv4List.length));
+  }))];
+  const limit = Math.max(1, TCP_CONCURRENCY | 0);
+  const ipList = ipv4List.length >= limit ? ipv4List.slice(0, limit) : ipv4List.concat(ipv6List.slice(0, limit - ipv4List.length));
   if (ipList.length === 0) return null;
-  return ipList.map(function(hostname, attempt) { return { hostname: hostname, port: port, attempt: attempt, resolvedFrom: address }; });
+  return ipList.map((hostname, attempt) => ({ hostname, port, attempt, resolvedFrom: address }));
 }
-__name(buildRaceCandidates, "buildRaceCandidates");
 
-async function connectDirect(address, port, initialData) {
-  var raceCandidates = await buildRaceCandidates(address, port);
-  var candidates = raceCandidates || Array.from({ length: TCP_CONCURRENCY }, function() { return { hostname: address, port: port }; });
-  var openConnection = async function(host, prt) {
-    var socket = connect({ hostname: host, port: prt });
+async function connectDirect(address, port, initialData = null) {
+  const raceCandidates = await buildRaceCandidates(address, port);
+  const candidates = raceCandidates || Array.from({ length: TCP_CONCURRENCY }, () => ({ hostname: address, port }));
+  const openConnection = async (host, prt) => {
+    const socket = connect({ hostname: host, port: prt });
     await Promise.race([
       socket.opened,
-      new Promise(function(_, reject) { return setTimeout(function() { return reject(new Error("timeout")); }, 1000); })
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 1e3))
     ]);
     return socket;
   };
   if (candidates.length === 1) {
-    var s = await openConnection(candidates[0].hostname, candidates[0].port);
+    const s = await openConnection(candidates[0].hostname, candidates[0].port);
     if (initialData && initialData.byteLength > 0) {
-      var w = s.writable.getWriter();
+      const w = s.writable.getWriter();
       await w.write(convertToUint8Array(initialData));
       w.releaseLock();
     }
     return s;
   }
-  var attempts = candidates.map(function(c) { return openConnection(c.hostname, c.port).then(function(socket) { return { socket: socket, candidate: c }; }); });
-  var winner = null;
+  const attempts = candidates.map((c) => openConnection(c.hostname, c.port).then((socket) => ({ socket, candidate: c })));
+  let winner = null;
   try {
     winner = await Promise.any(attempts);
     if (initialData && initialData.byteLength > 0) {
-      var w = winner.socket.writable.getWriter();
+      const w = winner.socket.writable.getWriter();
       await w.write(convertToUint8Array(initialData));
       w.releaseLock();
     }
     return winner.socket;
   } finally {
     if (winner) {
-      for (var i = 0; i < attempts.length; i++) {
-        attempts[i].then(function(_0) {
-          var { socket } = _0;
+      for (const attempt of attempts) {
+        attempt.then(({ socket }) => {
           if (socket !== winner.socket) {
             try {
               socket.close();
             } catch (e) {}
           }
-        }).catch(function() {});
+        }).catch(() => {});
       }
     }
   }
 }
-__name(connectDirect, "connectDirect");
 
 async function forwardVlessUDP(udpChunk, webSocket, respHeader) {
-  var requestData = convertToUint8Array(udpChunk);
+  const requestData = convertToUint8Array(udpChunk);
   try {
-    var tcpSocket = connect({ hostname: "8.8.4.4", port: 53 });
-    var vlessHeader = respHeader;
-    var writer = tcpSocket.writable.getWriter();
+    const tcpSocket = connect({ hostname: "8.8.4.4", port: 53 });
+    let vlessHeader = respHeader;
+    const writer = tcpSocket.writable.getWriter();
     await writer.write(requestData);
     writer.releaseLock();
     await tcpSocket.readable.pipeTo(new WritableStream({
       async write(chunk) {
-        var response = convertToUint8Array(chunk);
+        const response = convertToUint8Array(chunk);
         if (webSocket.readyState !== WebSocket.OPEN) return;
         if (vlessHeader) {
-          var merged = new Uint8Array(vlessHeader.length + response.byteLength);
+          const merged = new Uint8Array(vlessHeader.length + response.byteLength);
           merged.set(vlessHeader, 0);
           merged.set(response, vlessHeader.length);
           webSocket.send(merged.buffer);
@@ -2818,17 +2560,15 @@ async function forwardVlessUDP(udpChunk, webSocket, respHeader) {
     }));
   } catch (e) {}
 }
-__name(forwardVlessUDP, "forwardVlessUDP");
 
 function extractUUIDFromVless(data) {
   if (data.byteLength < 17) return null;
-  var hex = Array.from(data.slice(1, 17)).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
+  const hex = [...data.slice(1, 17)].map((b) => b.toString(16).padStart(2, "0")).join("");
   return hex.substring(0, 8) + "-" + hex.substring(8, 12) + "-" + hex.substring(12, 16) + "-" + hex.substring(16, 20) + "-" + hex.substring(20);
 }
-__name(extractUUIDFromVless, "extractUUIDFromVless");
 
 // ============================================
-// HTML TEMPLATES - PANEL
+// HTML TEMPLATES - COMPLETE
 // ============================================
 var HTML_TEMPLATES = {
   nginx: `<!DOCTYPE html>
@@ -2840,7 +2580,7 @@ var HTML_TEMPLATES = {
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        * { font-family: 'Inter', sans-serif; }
+        * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
         body { background: #0a0a0f; }
         .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.06); }
         .glow { box-shadow: 0 0 60px rgba(99, 102, 241, 0.15); }
@@ -2917,7 +2657,7 @@ var HTML_TEMPLATES = {
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        * { font-family: 'Inter', sans-serif; }
+        * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
         body { background: #0a0a0f; }
         .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.06); }
         .glow { box-shadow: 0 0 60px rgba(99, 102, 241, 0.15); }
@@ -2998,7 +2738,7 @@ var HTML_TEMPLATES = {
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        * { font-family: 'Inter', sans-serif; }
+        * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
         body { background: #0a0a0f; }
         .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.06); }
         .glow { box-shadow: 0 0 60px rgba(99, 102, 241, 0.15); }
@@ -3065,8 +2805,7 @@ var HTML_TEMPLATES = {
 </body>
 </html>`,
 
-  panel: `<!-- PANEL HTML - Full 3x-UI style with all features -->
-<!DOCTYPE html>
+  panel: `<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
@@ -3074,16 +2813,16 @@ var HTML_TEMPLATES = {
     <title>VoidLatency Panel</title>
     <script>
         const originalWarn = console.warn;
-        console.warn = function() {
-            if (typeof arguments[0] === 'string' && arguments[0].includes('cdn.tailwindcss.com')) return;
-            originalWarn.apply(console, arguments);
+        console.warn = (...args) => {
+            if (typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
+            originalWarn(...args);
         };
     <\/script>
     <script src="https://cdn.tailwindcss.com"><\/script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        * { font-family: 'Inter', sans-serif; }
+        * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
         body { background: #0a0a0f; color: #e5e7eb; }
         .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.06); }
         .glass-light { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); }
@@ -3121,25 +2860,107 @@ var HTML_TEMPLATES = {
         .port-checkbox:checked + .port-label-tls { border-color: #34d399; background: rgba(52, 211, 153, 0.1); color: #34d399; }
         .port-checkbox:checked + .port-label-nontls { border-color: #fbbf24; background: rgba(251, 191, 36, 0.1); color: #fbbf24; }
 
+        /* ============================================
+           MOBILE SIDEBAR STYLES
+           ============================================ */
         @media (max-width: 1023px) {
-            .sidebar { position: fixed; top: 0; left: -100%; width: 280px; height: 100vh; background: #0d0d18; border-right: 1px solid rgba(255,255,255,0.04); transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1000; overflow-y: auto; display: block; }
-            .sidebar.active { left: 0; }
-            .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 999; backdrop-filter: blur(4px); transition: opacity 0.3s ease; }
-            .sidebar-overlay.active { display: block; opacity: 1; }
-            .lg\\:ml-64 { margin-left: 0; }
-            .main-content { width: 100%; overflow-x: hidden; }
-            .sidebar .p-6 { padding: 16px; }
-            .sidebar-link { padding: 8px 12px; font-size: 13px; }
-            .sidebar .absolute.bottom-6 { position: relative; bottom: auto; left: auto; right: auto; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.04); }
-            .system-stat { padding: 12px; }
-            .stat-card { padding: 16px; }
+            .sidebar {
+                position: fixed !important;
+                top: 0 !important;
+                left: -100% !important;
+                width: 280px !important;
+                height: 100vh !important;
+                background: #0d0d18 !important;
+                border-right: 1px solid rgba(255,255,255,0.04) !important;
+                transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                z-index: 1000 !important;
+                overflow-y: auto !important;
+                display: block !important;
+                padding-top: 0 !important;
+            }
+            
+            .sidebar.active { 
+                left: 0 !important; 
+            }
+            
+            .sidebar-overlay {
+                display: none !important;
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                background: rgba(0,0,0,0.6) !important;
+                z-index: 999 !important;
+                backdrop-filter: blur(4px) !important;
+                -webkit-backdrop-filter: blur(4px) !important;
+                transition: opacity 0.3s ease !important;
+            }
+            
+            .sidebar-overlay.active { 
+                display: block !important; 
+                opacity: 1 !important;
+            }
+            
+            .lg\\:ml-64 { 
+                margin-left: 0 !important; 
+            }
+            
+            .main-content { 
+                width: 100% !important; 
+                overflow-x: hidden !important;
+            }
+            
+            .sidebar::-webkit-scrollbar {
+                width: 3px;
+            }
+            .sidebar::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            .sidebar::-webkit-scrollbar-thumb {
+                background: rgba(99, 102, 241, 0.3);
+                border-radius: 10px;
+            }
+            
+            .sidebar .p-6 {
+                padding: 16px !important;
+            }
+            .sidebar-link {
+                padding: 8px 12px !important;
+                font-size: 13px !important;
+            }
+            .sidebar .absolute.bottom-6 {
+                position: relative !important;
+                bottom: auto !important;
+                left: auto !important;
+                right: auto !important;
+                margin-top: 20px !important;
+                padding-top: 16px !important;
+                border-top: 1px solid rgba(255,255,255,0.04) !important;
+            }
+            .system-stat { padding: 12px !important; }
+            .stat-card { padding: 16px !important; }
             .users-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
             .users-table-wrap table { min-width: 700px; }
         }
+
         @media (max-width: 640px) {
-            .sidebar { width: 280px; }
-            .sidebar .p-6 { padding: 14px; }
-            .sidebar-link { padding: 6px 10px; font-size: 12px; }
+            .sidebar {
+                width: 280px !important;
+            }
+            .sidebar .p-6 {
+                padding: 14px !important;
+            }
+            .sidebar-link {
+                padding: 6px 10px !important;
+                font-size: 12px !important;
+            }
+            .sidebar .text-lg {
+                font-size: 16px !important;
+            }
+            .glass-modal { padding: 20px 16px; }
+            .modal-card { max-width: 100%; margin: 10px; }
+            .modal-card form .grid { grid-template-columns: 1fr; }
             .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
             .stats-grid .stat-card { padding: 12px; }
             .stats-grid .stat-card .w-12 { width: 36px; height: 36px; }
@@ -3156,7 +2977,7 @@ var HTML_TEMPLATES = {
     <!-- ============================================
     SIDEBAR
     ============================================ -->
-    <div class="sidebar fixed inset-y-0 left-0 w-64 z-50">
+    <div class="fixed inset-y-0 left-0 w-64 sidebar z-50">
         <div class="p-6">
             <div class="flex items-center gap-3 mb-10">
                 <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
@@ -3193,11 +3014,11 @@ var HTML_TEMPLATES = {
                     </svg>
                     Logs
                 </a>
-                <a href="#" onclick="showPage('docs')" class="sidebar-link flex items-center gap-3 text-sm font-medium text-zinc-400 hover:text-white transition" data-page="docs">
+                <a href="#" onclick="showPage('admins')" class="sidebar-link flex items-center gap-3 text-sm font-medium text-zinc-400 hover:text-white transition" data-page="admins">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
                     </svg>
-                    API Docs
+                    Admins
                 </a>
                 <a href="#" onclick="logoutAdmin()" class="sidebar-link flex items-center gap-3 text-sm font-medium text-zinc-400 hover:text-red-400 transition">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3249,7 +3070,7 @@ var HTML_TEMPLATES = {
                     <span class="w-px h-6 bg-zinc-800 hidden sm:block"></span>
                     <span class="text-xs text-emerald-400 flex items-center gap-1.5">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        <span class="hidden xs:inline">Xray</span>
+                        <span class="hidden xs:inline">Xray Running</span>
                     </span>
                     <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-white/5 text-zinc-400 transition">
                         <svg id="theme-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3270,66 +3091,50 @@ var HTML_TEMPLATES = {
             ========================================== -->
             <div id="page-dashboard" class="page-section active">
                 <!-- System Stats -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6 stats-grid" id="system-stats">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6 stats-grid">
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
                             <p class="text-[10px] sm:text-xs text-zinc-400 font-medium">CPU</p>
-                            <span class="text-[10px] sm:text-xs text-indigo-400" id="cpu-percent">48 Cores</span>
+                            <span class="text-[10px] sm:text-xs text-indigo-400">48 Cores</span>
                         </div>
-                        <p class="text-base sm:text-lg font-bold text-white" id="cpu-value">12.5%</p>
+                        <p class="text-base sm:text-lg font-bold text-white mt-1">12.5%</p>
                         <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-2">
-                            <div class="bg-indigo-500 h-1.5 rounded-full transition-all" id="cpu-bar" style="width: 12.5%"></div>
+                            <div class="bg-indigo-500 h-1.5 rounded-full transition-all" style="width: 12.5%"></div>
                         </div>
-                        <p class="text-[8px] sm:text-[10px] text-zinc-500 mt-1" id="load-values">12.5 | 11.4 | 11.6</p>
+                        <p class="text-[8px] sm:text-[10px] text-zinc-500 mt-1">12.5 | 11.4 | 11.6</p>
                     </div>
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
                             <p class="text-[10px] sm:text-xs text-zinc-400 font-medium">RAM</p>
-                            <span class="text-[10px] sm:text-xs text-emerald-400" id="ram-percent">49.4%</span>
+                            <span class="text-[10px] sm:text-xs text-emerald-400">49.4%</span>
                         </div>
-                        <p class="text-base sm:text-lg font-bold text-white" id="ram-used">159.30 GB</p>
-                        <p class="text-[8px] sm:text-xs text-zinc-500" id="ram-total">/ 322.69 GB</p>
+                        <p class="text-base sm:text-lg font-bold text-white">159.30 GB</p>
+                        <p class="text-[8px] sm:text-xs text-zinc-500">/ 322.69 GB</p>
                         <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-1">
-                            <div class="bg-emerald-500 h-1.5 rounded-full transition-all" id="ram-bar" style="width: 49.4%"></div>
+                            <div class="bg-emerald-500 h-1.5 rounded-full transition-all" style="width: 49.4%"></div>
                         </div>
                     </div>
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
                             <p class="text-[10px] sm:text-xs text-zinc-400 font-medium">Swap</p>
-                            <span class="text-[10px] sm:text-xs text-yellow-400" id="swap-percent">0.6%</span>
+                            <span class="text-[10px] sm:text-xs text-yellow-400">0.6%</span>
                         </div>
-                        <p class="text-base sm:text-lg font-bold text-white" id="swap-used">1.39 GB</p>
-                        <p class="text-[8px] sm:text-xs text-zinc-500" id="swap-total">/ 223.56 GB</p>
+                        <p class="text-base sm:text-lg font-bold text-white">1.39 GB</p>
+                        <p class="text-[8px] sm:text-xs text-zinc-500">/ 223.56 GB</p>
                         <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-1">
-                            <div class="bg-yellow-500 h-1.5 rounded-full transition-all" id="swap-bar" style="width: 0.6%"></div>
+                            <div class="bg-yellow-500 h-1.5 rounded-full transition-all" style="width: 0.6%"></div>
                         </div>
                     </div>
                     <div class="system-stat">
                         <div class="flex items-center justify-between">
                             <p class="text-[10px] sm:text-xs text-zinc-400 font-medium">Storage</p>
-                            <span class="text-[10px] sm:text-xs text-blue-400" id="storage-percent">28.6%</span>
+                            <span class="text-[10px] sm:text-xs text-blue-400">28.6%</span>
                         </div>
-                        <p class="text-base sm:text-lg font-bold text-white" id="storage-used">818.93 GB</p>
-                        <p class="text-[8px] sm:text-xs text-zinc-500" id="storage-total">/ 2.86 TB</p>
+                        <p class="text-base sm:text-lg font-bold text-white">818.93 GB</p>
+                        <p class="text-[8px] sm:text-xs text-zinc-500">/ 2.86 TB</p>
                         <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-1">
-                            <div class="bg-blue-500 h-1.5 rounded-full transition-all" id="storage-bar" style="width: 28.6%"></div>
+                            <div class="bg-blue-500 h-1.5 rounded-full transition-all" style="width: 28.6%"></div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Speed + Load Row -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
-                    <div class="glass rounded-2xl p-3 sm:p-4 flex items-center justify-between">
-                        <span class="text-xs text-zinc-400">⬇ Download</span>
-                        <span class="text-sm font-bold text-emerald-400" id="speed-down">45.2 KB/s</span>
-                    </div>
-                    <div class="glass rounded-2xl p-3 sm:p-4 flex items-center justify-between">
-                        <span class="text-xs text-zinc-400">⬆ Upload</span>
-                        <span class="text-sm font-bold text-blue-400" id="speed-up">12.8 KB/s</span>
-                    </div>
-                    <div class="glass rounded-2xl p-3 sm:p-4 flex items-center justify-between">
-                        <span class="text-xs text-zinc-400">🔗 TCP Connections</span>
-                        <span class="text-sm font-bold text-purple-400" id="tcp-conns">42</span>
                     </div>
                 </div>
 
@@ -3338,11 +3143,11 @@ var HTML_TEMPLATES = {
                     <div class="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
                         <div class="flex items-center gap-3 sm:gap-4 flex-wrap">
                             <div class="flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" id="xray-status-dot"></span>
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                                 <span class="text-sm font-bold text-white">Xray</span>
                             </div>
                             <span class="text-xs text-zinc-400 bg-zinc-800/50 px-2 py-1 rounded">v26.4.25</span>
-                            <span class="text-xs text-emerald-400 bg-emerald-500/10 px-2 sm:px-3 py-1 rounded-full border border-emerald-500/20" id="xray-status-text">● Running</span>
+                            <span class="text-xs text-emerald-400 bg-emerald-500/10 px-2 sm:px-3 py-1 rounded-full border border-emerald-500/20">● Running</span>
                         </div>
                         <div class="flex items-center gap-1 sm:gap-2">
                             <button onclick="controlXray('stop')" class="btn-xray text-xs sm:text-sm bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 px-2 sm:px-4">Stop</button>
@@ -3352,15 +3157,15 @@ var HTML_TEMPLATES = {
                         <div class="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-zinc-400 flex-wrap">
                             <span>Uptime: <span id="xray-uptime" class="text-white font-medium">3m</span></span>
                             <span class="hidden xs:inline">|</span>
-                            <span class="hidden xs:inline">RAM: <span id="xray-memory" class="text-white font-medium">50.98 MB</span></span>
+                            <span class="hidden xs:inline">RAM: <span class="text-white font-medium">50.98 MB</span></span>
                             <span class="hidden xs:inline">|</span>
-                            <span class="hidden xs:inline">Threads: <span id="xray-threads" class="text-white font-medium">14</span></span>
+                            <span class="hidden xs:inline">Threads: <span class="text-white font-medium">14</span></span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Stats Grid -->
-                <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 stats-grid">
+                <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-8 stats-grid">
                     <div class="glass rounded-2xl p-4 sm:p-6 stat-card">
                         <div class="flex items-center justify-between">
                             <div>
@@ -3421,7 +3226,7 @@ var HTML_TEMPLATES = {
             </div>
 
             <!-- ==========================================
-            PAGE: USERS - Same as before (truncated for brevity)
+            PAGE: USERS
             ========================================== -->
             <div id="page-users" class="page-section">
                 <div class="glass rounded-2xl p-4 sm:p-6">
@@ -3512,19 +3317,6 @@ var HTML_TEMPLATES = {
                                 <option value="">Loading...</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Panel Domain (for IPs card)</label>
-                            <input type="text" id="panel-domain-input" placeholder="your-domain.workers.dev" class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
-                        </div>
-                        <div>
-                            <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Path Prefix (@VoidLatency)</label>
-                            <input type="text" id="path-prefix-input" placeholder="@VoidLatency" class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
-                            <p class="text-[10px] text-zinc-500 mt-1">Changes apply to new configs only. Existing configs keep their current prefix.</p>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <input type="checkbox" id="auto-reset-checkbox" class="w-4 h-4 rounded border-zinc-700 bg-zinc-800/50 text-indigo-500 focus:ring-indigo-500">
-                            <label class="text-sm text-zinc-300">Enable daily traffic reset at 03:30 UTC</label>
-                        </div>
                         <div class="grid grid-cols-2 gap-3 sm:gap-4">
                             <div>
                                 <label class="block text-zinc-300 text-xs font-semibold mb-1.5 uppercase tracking-wider">Fragment Length</label>
@@ -3543,8 +3335,24 @@ var HTML_TEMPLATES = {
                                 <button type="button" onclick="changeAdminPassword()" id="change-pwd-btn" class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm">Update Panel Password</button>
                             </div>
                         </div>
+                        <div class="border-t border-zinc-800/30 pt-4">
+                            <h4 class="text-sm font-semibold text-white mb-3">Admin Users</h4>
+                            <div class="space-y-3">
+                                <input type="text" id="admin-username" placeholder="Admin username..." class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
+                                <input type="password" id="admin-password" placeholder="Admin password..." class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
+                                <button type="button" onclick="addAdmin()" class="w-full py-3 bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-emerald-500/25">Add Admin User</button>
+                            </div>
+                            <div id="admins-list" class="mt-3 space-y-2">
+                                <p class="text-zinc-400 text-sm">Loading admins...</p>
+                            </div>
+                        </div>
+                        <div class="pt-4 border-t border-zinc-800/30">
+                            <h4 class="text-sm font-semibold text-white mb-3">Update Panel</h4>
+                            <div id="update-info" class="text-xs text-zinc-400 mb-2">Checking for updates...</div>
+                            <button onclick="checkUpdate()" class="w-full py-3 bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-emerald-500/25">Check for Updates</button>
+                        </div>
                         <div class="flex gap-3 pt-2 border-t border-zinc-800/30">
-                            <button type="button" onclick="saveSettings()" id="save-settings-btn" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-indigo-500/25">Save Settings</button>
+                            <button type="button" onclick="saveSettings()" id="save-settings-btn" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-indigo-500/25">Save</button>
                         </div>
                     </div>
                 </div>
@@ -3567,14 +3375,21 @@ var HTML_TEMPLATES = {
             </div>
 
             <!-- ==========================================
-            PAGE: API DOCS
+            PAGE: ADMINS
             ========================================== -->
-            <div id="page-docs" class="page-section">
-                <div class="glass rounded-2xl p-4 sm:p-6">
-                    <h2 class="text-lg font-bold text-white mb-4">API Documentation</h2>
-                    <p class="text-xs text-zinc-400 mb-4">Complete REST API for panel management</p>
-                    <div id="api-docs-container" class="space-y-4 max-h-[70vh] overflow-y-auto scrollbar-thin">
-                        <div class="text-zinc-400 text-sm">Loading API documentation...</div>
+            <div id="page-admins" class="page-section">
+                <div class="glass rounded-2xl p-4 sm:p-6 max-w-md">
+                    <h2 class="text-lg font-bold text-white mb-4">Admin Management</h2>
+                    <div id="admins-list-2" class="space-y-2">
+                        <p class="text-zinc-400 text-sm">Loading admins...</p>
+                    </div>
+                    <div class="border-t border-zinc-800/30 pt-4 mt-4">
+                        <h4 class="text-sm font-semibold text-white mb-3">Add New Admin</h4>
+                        <div class="space-y-3">
+                            <input type="text" id="admin-username-2" placeholder="Username..." class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
+                            <input type="password" id="admin-password-2" placeholder="Password..." class="w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 text-sm outline-none transition">
+                            <button onclick="addAdmin2()" class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-sm shadow-lg shadow-indigo-500/25">Add</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3678,7 +3493,7 @@ var HTML_TEMPLATES = {
     </div>
 
     <!-- ============================================
-    JAVASCRIPT - Full panel logic
+    JAVASCRIPT
     ============================================ -->
     <script>
         // ============================================
@@ -3693,18 +3508,23 @@ var HTML_TEMPLATES = {
         let allUsers = [];
         let lastServerTime = Date.now();
         let currentTheme = 'dark';
-        let statsInterval = null;
-        let updateInterval = null;
 
         // ============================================
-        // SIDEBAR TOGGLE
+        // SIDEBAR TOGGLE - COMPLETE
         // ============================================
         function toggleSidebar() {
             var sidebar = document.querySelector('.sidebar');
             var overlay = document.getElementById('sidebar-overlay');
             var menuIcon = document.querySelector('#menu-icon');
-            if (sidebar) sidebar.classList.toggle('active');
-            if (overlay) overlay.classList.toggle('active');
+            
+            if (sidebar) {
+                sidebar.classList.toggle('active');
+            }
+            if (overlay) {
+                overlay.classList.toggle('active');
+            }
+            
+            // تغییر آیکون منو
             if (menuIcon) {
                 if (sidebar && sidebar.classList.contains('active')) {
                     menuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>';
@@ -3714,14 +3534,17 @@ var HTML_TEMPLATES = {
             }
         }
 
+        // بستن منو با کلیک روی Overlay
         document.addEventListener('click', function(event) {
             var sidebar = document.querySelector('.sidebar');
             var toggleBtn = document.querySelector('.lg\\:hidden.p-2');
             var overlay = document.getElementById('sidebar-overlay');
+            
             if (window.innerWidth < 1024 && sidebar && toggleBtn && overlay) {
                 if (!sidebar.contains(event.target) && !toggleBtn.contains(event.target)) {
                     sidebar.classList.remove('active');
                     overlay.classList.remove('active');
+                    
                     var menuIcon = document.querySelector('#menu-icon');
                     if (menuIcon) {
                         menuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>';
@@ -3730,6 +3553,7 @@ var HTML_TEMPLATES = {
             }
         });
 
+        // بستن منو با دکمه ESC
         document.addEventListener('keydown', function(event) {
             if (event.key === 'Escape') {
                 var sidebar = document.querySelector('.sidebar');
@@ -3737,6 +3561,7 @@ var HTML_TEMPLATES = {
                 if (sidebar && sidebar.classList.contains('active')) {
                     sidebar.classList.remove('active');
                     overlay.classList.remove('active');
+                    
                     var menuIcon = document.querySelector('#menu-icon');
                     if (menuIcon) {
                         menuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>';
@@ -3746,13 +3571,12 @@ var HTML_TEMPLATES = {
         });
 
         // ============================================
-        // PAGE NAVIGATION
+        // PAGE NAVIGATION (با بستن خودکار منو در موبایل)
         // ============================================
         function showPage(page) {
-            document.querySelectorAll('.page-section').forEach(function(el) { el.classList.remove('active'); });
-            var target = document.getElementById('page-' + page);
-            if (target) target.classList.add('active');
-            document.querySelectorAll('.sidebar-link').forEach(function(el) { el.classList.remove('active'); });
+            document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+            document.getElementById('page-' + page).classList.add('active');
+            document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('active'));
             var activeLink = document.querySelector('.sidebar-link[data-page="' + page + '"]');
             if (activeLink) activeLink.classList.add('active');
             var titles = {
@@ -3760,16 +3584,18 @@ var HTML_TEMPLATES = {
                 users: ['Users', 'Manage your VLESS users'],
                 settings: ['Panel Settings', 'Configure panel preferences'],
                 logs: ['System Logs', 'Real-time activity logs'],
-                docs: ['API Documentation', 'Complete API reference']
+                admins: ['Admin Management', 'Add or remove administrators']
             };
-            document.getElementById('page-title').innerText = titles[page] ? titles[page][0] : 'Page';
-            document.getElementById('page-subtitle').innerText = titles[page] ? titles[page][1] : '';
-            if (page === 'docs') loadApiDocs();
+            document.getElementById('page-title').innerText = titles[page][0];
+            document.getElementById('page-subtitle').innerText = titles[page][1];
+            
+            // بستن خودکار منو در موبایل بعد از کلیک
             if (window.innerWidth < 1024) {
                 var sidebar = document.querySelector('.sidebar');
                 var overlay = document.getElementById('sidebar-overlay');
                 if (sidebar) sidebar.classList.remove('active');
                 if (overlay) overlay.classList.remove('active');
+                
                 var menuIcon = document.querySelector('#menu-icon');
                 if (menuIcon) {
                     menuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>';
@@ -3781,14 +3607,14 @@ var HTML_TEMPLATES = {
         // THEME TOGGLE
         // ============================================
         async function toggleTheme() {
-            var newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
             try {
-                var res = await fetch('/api/theme', {
+                const res = await fetch('/api/theme', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ theme: newTheme })
                 });
-                var data = await res.json();
+                const data = await res.json();
                 if (data.success) {
                     currentTheme = data.theme;
                     applyTheme(currentTheme);
@@ -3800,8 +3626,8 @@ var HTML_TEMPLATES = {
         }
 
         function applyTheme(theme) {
-            var html = document.documentElement;
-            var icon = document.getElementById('theme-icon');
+            const html = document.documentElement;
+            const icon = document.getElementById('theme-icon');
             if (theme === 'light') {
                 html.classList.remove('dark');
                 icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z"/>';
@@ -3818,14 +3644,37 @@ var HTML_TEMPLATES = {
 
         async function loadTheme() {
             try {
-                var res = await fetch('/api/theme');
-                var data = await res.json();
+                const res = await fetch('/api/theme');
+                const data = await res.json();
                 currentTheme = data.theme || 'dark';
                 applyTheme(currentTheme);
             } catch (e) {
-                var saved = localStorage.getItem('theme') || 'dark';
+                const saved = localStorage.getItem('theme') || 'dark';
                 currentTheme = saved;
                 applyTheme(saved);
+            }
+        }
+
+        // ============================================
+        // UPDATE CHECK
+        // ============================================
+        async function checkUpdate() {
+            const info = document.getElementById('update-info');
+            info.innerText = 'Checking for updates...';
+            info.style.color = '#60a5fa';
+            try {
+                const res = await fetch('/api/update-check');
+                const data = await res.json();
+                if (data.update_available) {
+                    info.innerHTML = '✅ New version <strong>' + data.latest_version + '</strong> available! <a href="' + data.url + '" target="_blank" class="text-emerald-400 hover:underline">View release</a>';
+                    info.style.color = '#34d399';
+                } else {
+                    info.innerHTML = '✅ You are running the latest version <strong>' + data.current_version + '</strong>';
+                    info.style.color = '#34d399';
+                }
+            } catch (e) {
+                info.innerText = '❌ Could not check for updates';
+                info.style.color = '#ef4444';
             }
         }
 
@@ -3835,7 +3684,6 @@ var HTML_TEMPLATES = {
         function renderPortCheckboxes() {
             var tlsContainer = document.getElementById('tls-ports-list');
             var nonTlsContainer = document.getElementById('nontls-ports-list');
-            if (!tlsContainer || !nonTlsContainer) return;
 
             tlsContainer.innerHTML = tlsPorts.map(function(port) {
                 var checked = port === '443' ? 'checked' : '';
@@ -3863,7 +3711,6 @@ var HTML_TEMPLATES = {
         function toggleModal(show) {
             var modal = document.getElementById('user-modal');
             var card = document.getElementById('user-modal-card');
-            if (!modal || !card) return;
             if (show) {
                 modal.classList.remove('opacity-0', 'pointer-events-none');
                 modal.classList.add('opacity-100', 'pointer-events-auto');
@@ -3876,32 +3723,22 @@ var HTML_TEMPLATES = {
                 card.classList.add('opacity-0', 'scale-95');
                 isEditMode = false;
                 editingUsername = '';
-                var titleEl = document.getElementById('modal-title');
-                var submitBtn = document.getElementById('submit-btn');
-                var nameInput = document.getElementById('input-name');
-                if (titleEl) titleEl.innerText = 'Create User';
-                if (submitBtn) submitBtn.innerText = 'Create';
-                if (nameInput) nameInput.disabled = false;
-                var form = document.getElementById('create-user-form');
-                if (form) form.reset();
-                setTimeout(function() {
-                    var cb443 = document.querySelector('input[name="ports"][value="443"]');
-                    if (cb443) cb443.checked = true;
-                }, 100);
+                document.getElementById('modal-title').innerText = 'Create User';
+                document.getElementById('submit-btn').innerText = 'Create';
+                document.getElementById('input-name').disabled = false;
+                document.getElementById('create-user-form').reset();
+                var cb443 = document.querySelector('input[name="ports"][value="443"]');
+                if (cb443) cb443.checked = true;
             }
         }
 
         function openCreateModal() {
             isEditMode = false;
             editingUsername = '';
-            var titleEl = document.getElementById('modal-title');
-            var submitBtn = document.getElementById('submit-btn');
-            var nameInput = document.getElementById('input-name');
-            if (titleEl) titleEl.innerText = 'Create User';
-            if (submitBtn) submitBtn.innerText = 'Create';
-            if (nameInput) nameInput.disabled = false;
-            var form = document.getElementById('create-user-form');
-            if (form) form.reset();
+            document.getElementById('modal-title').innerText = 'Create User';
+            document.getElementById('submit-btn').innerText = 'Create';
+            document.getElementById('input-name').disabled = false;
+            document.getElementById('create-user-form').reset();
             toggleModal(true);
             setTimeout(function() {
                 var cb443 = document.querySelector('input[name="ports"][value="443"]');
@@ -3911,33 +3748,26 @@ var HTML_TEMPLATES = {
 
         function toggleQRModal(show, link, title) {
             var modal = document.getElementById('qr-modal');
-            if (!modal) return;
             var card = modal.querySelector('div');
             var qrBox = document.getElementById('qrcode-box');
             var titleEl = document.getElementById('qr-modal-title');
-            if (show && link) {
-                if (titleEl) titleEl.innerText = title || 'QR Code';
-                if (qrBox) {
-                    qrBox.innerHTML = '';
-                    try {
-                        new QRCode(qrBox, { text: link, width: 192, height: 192, colorDark: "#000000", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
-                    } catch(e) {
-                        qrBox.innerHTML = '<p class="text-zinc-400 text-xs">Error generating QR</p>';
-                    }
+            if (show) {
+                titleEl.innerText = title || 'QR Code';
+                qrBox.innerHTML = '';
+                try {
+                    new QRCode(qrBox, { text: link, width: 192, height: 192, colorDark: "#000000", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+                } catch(e) {
+                    qrBox.innerHTML = '<p class="text-zinc-400 text-xs">Error generating QR</p>';
                 }
                 modal.classList.remove('opacity-0', 'pointer-events-none');
                 modal.classList.add('opacity-100', 'pointer-events-auto');
-                if (card) {
-                    card.classList.remove('opacity-0', 'scale-95');
-                    card.classList.add('opacity-100', 'scale-100');
-                }
+                card.classList.remove('opacity-0', 'scale-95');
+                card.classList.add('opacity-100', 'scale-100');
             } else {
                 modal.classList.remove('opacity-100', 'pointer-events-auto');
                 modal.classList.add('opacity-0', 'pointer-events-none');
-                if (card) {
-                    card.classList.remove('opacity-100', 'scale-100');
-                    card.classList.add('opacity-0', 'scale-95');
-                }
+                card.classList.remove('opacity-100', 'scale-100');
+                card.classList.add('opacity-0', 'scale-95');
             }
         }
 
@@ -3949,12 +3779,12 @@ var HTML_TEMPLATES = {
                 var res = await fetch('/api/xray', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: action })
+                    body: JSON.stringify({ action })
                 });
                 var data = await res.json();
                 if (data.success) {
                     alert('✅ Xray ' + action + 'ed successfully!');
-                    updateSystemStats();
+                    updateXrayStatus();
                 } else {
                     alert('❌ Failed to ' + action + ' Xray');
                 }
@@ -3963,356 +3793,129 @@ var HTML_TEMPLATES = {
             }
         }
 
-        // ============================================
-        // SYSTEM STATS - REAL DRIFTING
-        // ============================================
-        async function updateSystemStats() {
+        async function updateXrayStatus() {
             try {
-                var res = await fetch('/api/system/stats?t=' + Date.now());
-                if (!res.ok) throw new Error();
+                var res = await fetch('/api/xray/status');
                 var data = await res.json();
-                
-                // Update CPU
-                var cpuPercent = document.getElementById('cpu-percent');
-                var cpuValue = document.getElementById('cpu-value');
-                var cpuBar = document.getElementById('cpu-bar');
-                var loadValues = document.getElementById('load-values');
-                if (cpuPercent) cpuPercent.innerText = Math.round(data.cpu.percent) + '%';
-                if (cpuValue) cpuValue.innerText = data.cpu.percent.toFixed(1) + '%';
-                if (cpuBar) cpuBar.style.width = Math.min(data.cpu.percent, 100) + '%';
-                if (loadValues) loadValues.innerText = data.cpu.load.map(function(v) { return v.toFixed(1); }).join(' | ');
-                
-                // Update RAM
-                var ramPercent = document.getElementById('ram-percent');
-                var ramUsed = document.getElementById('ram-used');
-                var ramTotal = document.getElementById('ram-total');
-                var ramBar = document.getElementById('ram-bar');
-                if (ramPercent) ramPercent.innerText = data.ram.percent.toFixed(1) + '%';
-                if (ramUsed) ramUsed.innerText = data.ram.used.toFixed(2) + ' GB';
-                if (ramTotal) ramTotal.innerText = '/ ' + data.ram.total.toFixed(2) + ' GB';
-                if (ramBar) ramBar.style.width = Math.min(data.ram.percent, 100) + '%';
-                
-                // Update Swap
-                var swapPercent = document.getElementById('swap-percent');
-                var swapUsed = document.getElementById('swap-used');
-                var swapTotal = document.getElementById('swap-total');
-                var swapBar = document.getElementById('swap-bar');
-                if (swapPercent) swapPercent.innerText = data.swap.percent.toFixed(1) + '%';
-                if (swapUsed) swapUsed.innerText = data.swap.used.toFixed(2) + ' GB';
-                if (swapTotal) swapTotal.innerText = '/ ' + data.swap.total.toFixed(2) + ' GB';
-                if (swapBar) swapBar.style.width = Math.min(data.swap.percent, 100) + '%';
-                
-                // Update Storage
-                var storagePercent = document.getElementById('storage-percent');
-                var storageUsed = document.getElementById('storage-used');
-                var storageTotal = document.getElementById('storage-total');
-                var storageBar = document.getElementById('storage-bar');
-                if (storagePercent) storagePercent.innerText = data.storage.percent.toFixed(1) + '%';
-                if (storageUsed) storageUsed.innerText = data.storage.used.toFixed(2) + ' GB';
-                if (storageTotal) storageTotal.innerText = '/ ' + data.storage.total.toFixed(2) + ' GB';
-                if (storageBar) storageBar.style.width = Math.min(data.storage.percent, 100) + '%';
-                
-                // Update Speed
-                var speedDown = document.getElementById('speed-down');
-                var speedUp = document.getElementById('speed-up');
-                if (speedDown) speedDown.innerText = data.speed.down.toFixed(1) + ' KB/s';
-                if (speedUp) speedUp.innerText = data.speed.up.toFixed(1) + ' KB/s';
-                
-                // Update TCP connections
-                var tcpConns = document.getElementById('tcp-conns');
-                if (tcpConns) tcpConns.innerText = data.tcp_connections;
-                
-                // Update Xray status
-                var xrayStatusText = document.getElementById('xray-status-text');
-                var xrayStatusDot = document.getElementById('xray-status-dot');
-                var xrayUptime = document.getElementById('xray-uptime');
-                var xrayMemory = document.getElementById('xray-memory');
-                var xrayThreads = document.getElementById('xray-threads');
-                
-                if (data.xray_uptime !== undefined) {
-                    var uptime = data.xray_uptime;
+                if (data.running) {
+                    var uptime = data.uptime;
                     var hours = Math.floor(uptime / 3600);
                     var minutes = Math.floor((uptime % 3600) / 60);
-                    var uptimeStr = hours > 0 ? hours + 'h ' + minutes + 'm' : minutes + 'm';
-                    if (xrayUptime) xrayUptime.innerText = uptimeStr;
+                    document.getElementById('xray-uptime').innerText = hours > 0 ? hours + 'h ' + minutes + 'm' : minutes + 'm';
+                } else {
+                    document.getElementById('xray-uptime').innerText = 'Stopped';
                 }
-                if (xrayMemory) xrayMemory.innerText = data.xray_memory || '50.98 MB';
-                if (xrayThreads) xrayThreads.innerText = data.xray_threads || '14';
-                
-                // Update Xray running status
-                if (data.xray_running !== undefined) {
-                    var running = data.xray_running;
-                    if (xrayStatusText) {
-                        xrayStatusText.innerText = running ? '● Running' : '● Stopped';
-                        xrayStatusText.className = running ? 'text-xs text-emerald-400 bg-emerald-500/10 px-2 sm:px-3 py-1 rounded-full border border-emerald-500/20' : 'text-xs text-red-400 bg-red-500/10 px-2 sm:px-3 py-1 rounded-full border border-red-500/20';
-                    }
-                    if (xrayStatusDot) {
-                        xrayStatusDot.className = running ? 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse' : 'w-2 h-2 rounded-full bg-red-400';
-                    }
-                }
-            } catch (e) {
-                console.log('Stats update failed:', e);
-            }
+            } catch (e) {}
         }
 
         // ============================================
-        // USER LOADING & RENDERING
+        // ADMIN MANAGEMENT
         // ============================================
-        async function loadUsers(silent) {
-            var loadingState = document.getElementById('loading-state');
-            var tableContainer = document.getElementById('users-table-container');
-            var emptyState = document.getElementById('empty-state');
-            if (!silent) {
-                if (loadingState) loadingState.classList.remove('hidden');
-                if (tableContainer) tableContainer.classList.add('hidden');
-                if (emptyState) emptyState.classList.add('hidden');
-            }
+        async function loadAdminsList() {
             try {
-                var res = await fetch('/api/users?t=' + Date.now());
-                if (!res.ok) throw new Error();
+                var res = await fetch('/api/admins');
                 var data = await res.json();
-                renderUsersUI(data);
-            } catch (err) {
-                if (!silent && loadingState) {
-                    loadingState.innerHTML = '<span class="text-red-400">❌ Error loading users</span>';
-                }
-            }
-        }
-
-        function renderUsersUI(data) {
-            try {
-                var users = data.users || [];
-                allUsers = users;
-                var serverTime = data.serverTime || Date.now();
-                lastServerTime = serverTime;
-                var totalUsersCount = users.length;
-                var activeUsersCount = users.filter(function(u) { return u.is_online === 1; }).length;
-                var totalGbUsage = users.reduce(function(sum, u) { return sum + (u.used_gb || 0); }, 0);
-                
-                var statTotal = document.getElementById('stat-total-users');
-                var statActive = document.getElementById('stat-active-users');
-                var statUsage = document.getElementById('stat-total-usage');
-                var statTop = document.getElementById('stat-top-user');
-                var statTopUsage = document.getElementById('stat-top-user-usage');
-                
-                if (statTotal) statTotal.innerText = totalUsersCount;
-                if (statActive) statActive.innerText = activeUsersCount;
-                if (statUsage) statUsage.innerText = totalGbUsage < 1 ? (totalGbUsage * 1024).toFixed(0) + ' MB' : totalGbUsage.toFixed(2) + ' GB';
-                
-                var topUser = users.reduce(function(max, u) { return (u.used_gb || 0) > (max.used_gb || 0) ? u : max; }, { username: 'None', used_gb: 0 });
-                if (statTop) statTop.innerText = topUser.username;
-                var topUsage = topUser.used_gb || 0;
-                if (statTopUsage) statTopUsage.innerText = topUsage < 1 ? (topUsage * 1024).toFixed(0) + ' MB used' : topUsage.toFixed(2) + ' GB used';
-                
-                filterAndRenderUsers();
-            } catch (err) {
-                console.log('Render error:', err);
-            }
-        }
-
-        function filterAndRenderUsers() {
-            if (!allUsers) return;
-            var searchQuery = (document.getElementById('search-input').value || '').toLowerCase().trim();
-            var filterStatus = document.getElementById('filter-status').value;
-            var sortVal = document.getElementById('sort-users').value;
-            var serverTime = lastServerTime || Date.now();
-            var filtered = allUsers.slice();
-            
-            if (searchQuery) {
-                filtered = filtered.filter(function(u) {
-                    return (u.username || '').toLowerCase().includes(searchQuery) || 
-                           (u.uuid || '').toLowerCase().includes(searchQuery);
-                });
-            }
-            
-            if (filterStatus !== 'all') {
-                filtered = filtered.filter(function(u) {
-                    var isOnline = u.is_online === 1;
-                    var isActive = u.is_active === 1;
-                    var isExpired = false;
-                    if (u.limit_gb && u.used_gb >= u.limit_gb) isExpired = true;
-                    if (u.expiry_days && u.created_at) {
-                        var created = new Date(u.created_at);
-                        var expiryDate = new Date(created.getTime() + (u.expiry_days * 24 * 60 * 60 * 1000));
-                        if (new Date(serverTime) > expiryDate) isExpired = true;
-                    }
-                    if (filterStatus === 'active') return isActive && !isExpired;
-                    if (filterStatus === 'inactive') return !isActive;
-                    if (filterStatus === 'online') return isOnline;
-                    if (filterStatus === 'offline') return !isOnline;
-                    if (filterStatus === 'expired') return isExpired || !isActive;
-                    return true;
-                });
-            }
-            
-            filtered.sort(function(a, b) {
-                if (sortVal === 'newest') return b.id - a.id;
-                if (sortVal === 'name') return (a.username || '').localeCompare(b.username || '');
-                if (sortVal === 'usage-desc') return (b.used_gb || 0) - (a.used_gb || 0);
-                if (sortVal === 'usage-asc') return (a.used_gb || 0) - (b.used_gb || 0);
-                if (sortVal === 'expiry-asc') {
-                    var getRemaining = function(u) {
-                        if (!u.expiry_days) return Infinity;
-                        if (!u.created_at) return Infinity;
-                        var created = new Date(u.created_at);
-                        var expiryDate = new Date(created.getTime() + (u.expiry_days * 24 * 60 * 60 * 1000));
-                        return expiryDate - new Date(serverTime);
-                    };
-                    return getRemaining(a) - getRemaining(b);
-                }
-                return 0;
-            });
-            
-            renderFilteredUsers(filtered, serverTime);
-        }
-
-        function renderFilteredUsers(users, serverTime) {
-            var loadingState = document.getElementById('loading-state');
-            var tableContainer = document.getElementById('users-table-container');
-            var emptyState = document.getElementById('empty-state');
-            var tbody = document.getElementById('users-tbody');
-            
-            if (users.length === 0) {
-                if (loadingState) loadingState.classList.add('hidden');
-                if (emptyState) emptyState.classList.remove('hidden');
-                if (tableContainer) tableContainer.classList.add('hidden');
-                if (emptyState && emptyState.querySelector('p')) {
-                    emptyState.querySelector('p').innerText = allUsers && allUsers.length > 0 ? 'No users match your search criteria.' : 'No users found. Click "Add User" to get started.';
-                }
-            } else {
-                if (loadingState) loadingState.classList.add('hidden');
-                if (emptyState) emptyState.classList.add('hidden');
-                if (tableContainer) tableContainer.classList.remove('hidden');
-                
-                if (tbody) {
-                    tbody.innerHTML = users.map(function(user) {
-                        var createdDate = user.created_at ? new Date(user.created_at).toLocaleDateString() : '-';
-                        var daysRemaining = 'Unlimited';
-                        var daysPercent = 100;
-                        if (user.expiry_days) {
-                            if (user.created_at) {
-                                var created = new Date(user.created_at);
-                                var expiryDate = new Date(created.getTime() + (user.expiry_days * 24 * 60 * 60 * 1000));
-                                var diffDays = Math.ceil((expiryDate - new Date(serverTime)) / (1000 * 60 * 60 * 24));
-                                daysRemaining = diffDays > 0 ? diffDays : 0;
-                                daysPercent = Math.max(0, Math.min(100, (daysRemaining / user.expiry_days) * 100));
-                            } else {
-                                daysRemaining = user.expiry_days;
-                            }
-                        }
-                        
-                        var usedGb = user.used_gb || 0;
-                        var formattedUsed = usedGb < 1 ? (usedGb * 1024).toFixed(0) + ' MB' : usedGb.toFixed(2) + ' GB';
-                        var volumeHtml = '';
-                        if (user.limit_gb) {
-                            var limitPercent = Math.min((usedGb / user.limit_gb) * 100, 100);
-                            var limitHue = 120 - (limitPercent * 1.2);
-                            var formattedLimit = user.limit_gb < 1 ? (user.limit_gb * 1024).toFixed(0) + ' MB' : user.limit_gb + ' GB';
-                            volumeHtml = '<div class="flex flex-col gap-1 w-full min-w-[100px]">' +
-                                '<div class="flex justify-between text-[10px] sm:text-[11px] text-zinc-400 font-medium">' +
-                                    '<span>Used: ' + formattedUsed + '</span>' +
-                                    '<span>Total: ' + formattedLimit + '</span>' +
-                                '</div>' +
-                                '<div class="w-full bg-zinc-800 rounded-full h-1 overflow-hidden">' +
-                                    '<div class="h-1 rounded-full transition-all duration-500" style="width: ' + limitPercent + '%; background-color: hsl(' + limitHue + ', 80%, 45%)"></div>' +
-                                '</div>' +
-                            '</div>';
-                        } else {
-                            volumeHtml = '<div class="flex flex-col gap-1 w-full min-w-[100px]">' +
-                                '<div class="flex justify-between text-[10px] sm:text-[11px] text-zinc-400 font-medium">' +
-                                    '<span>Used: ' + formattedUsed + '</span>' +
-                                    '<span>Total: Unlimited</span>' +
-                                '</div>' +
-                                '<div class="w-full bg-zinc-800 rounded-full h-1 overflow-hidden">' +
-                                    '<div class="bg-blue-500 h-1 rounded-full transition-all duration-500" style="width: 100%"></div>' +
-                                '</div>' +
-                            '</div>';
-                        }
-                        
-                        var expiryHtml = '';
-                        if (user.expiry_days) {
-                            var expiryHue = daysPercent * 1.2;
-                            expiryHtml = '<div class="flex flex-col gap-1 w-full min-w-[100px]">' +
-                                '<div class="flex justify-between text-[10px] sm:text-[11px] text-zinc-400 font-medium">' +
-                                    '<span>Remaining: ' + daysRemaining + ' days</span>' +
-                                    '<span>Total: ' + user.expiry_days + ' days</span>' +
-                                '</div>' +
-                                '<div class="w-full bg-zinc-800 rounded-full h-1 overflow-hidden flex justify-end">' +
-                                    '<div class="h-1 rounded-full transition-all duration-500" style="width: ' + daysPercent + '%; background-color: hsl(' + expiryHue + ', 80%, 45%)"></div>' +
-                                '</div>' +
-                            '</div>';
-                        } else {
-                            expiryHtml = '<div class="flex flex-col gap-1 w-full min-w-[100px]">' +
-                                '<div class="flex justify-between text-[10px] sm:text-[11px] text-zinc-400 font-medium">' +
-                                    '<span>Remaining: Unlimited</span>' +
-                                    '<span>Total: Unlimited</span>' +
-                                '</div>' +
-                                '<div class="w-full bg-zinc-800 rounded-full h-1 overflow-hidden flex justify-end">' +
-                                    '<div class="bg-blue-500 h-1 rounded-full transition-all duration-500" style="width: 100%"></div>' +
-                                '</div>' +
-                            '</div>';
-                        }
-                        
-                        var statusBtnColor = user.is_active === 0 ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-amber-400 hover:bg-amber-500/10';
-                        var statusBtnTitle = user.is_active === 0 ? 'Activate' : 'Deactivate';
-                        var statusBtnIcon = user.is_active === 0 
-                            ? '<svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
-                            : '<svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
-                        var statusClass = user.is_active === 0 ? 'badge-danger' : 'badge-success';
-                        var statusText = user.is_active === 0 ? 'Inactive' : 'Active';
-                        var onlineClass = user.is_online === 1 ? 'badge-success' : 'badge';
-                        var onlineText = user.is_online === 1 ? '● Online' : 'Offline';
-                        var configName = user.config_name || user.username;
-                        
-                        return '<tr class="hover:bg-white/5 border-b border-zinc-800/30">' +
-                            '<td class="p-2 sm:p-3">' +
-                                '<div class="flex flex-col gap-1">' +
-                                    '<span class="font-bold text-white text-xs sm:text-sm truncate max-w-[120px] sm:max-w-[200px]">' + configName + '</span>' +
-                                    '<div class="flex items-center gap-1 flex-wrap">' +
-                                        '<span class="badge ' + statusClass + '">' + statusText + '</span>' +
-                                        '<span class="badge ' + onlineClass + '">' + onlineText + '</span>' +
-                                    '</div>' +
-                                    '<div class="flex gap-0.5 sm:gap-1 flex-wrap user-actions-wrap">' +
-                                        '<button onclick="copyConfig(\\'' + encodeURIComponent(user.username) + '\\')" title="Copy VLESS" class="action-btn text-zinc-400 hover:text-indigo-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>' +
-                                        '<button onclick="copyJsonConfig(\\'' + encodeURIComponent(user.username) + '\\')" title="Copy JSON" class="action-btn text-zinc-400 hover:text-purple-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg></button>' +
-                                        '<button onclick="showQR(\\'' + encodeURIComponent(user.username) + '\\')" title="QR" class="action-btn text-zinc-400 hover:text-emerald-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg></button>' +
-                                        '<button onclick="toggleUserStatus(\\'' + encodeURIComponent(user.username) + '\\')" title="' + statusBtnTitle + '" class="action-btn ' + statusBtnColor + ' transition">' + statusBtnIcon + '</button>' +
-                                        '<button onclick="editUser(\\'' + encodeURIComponent(user.username) + '\\')" title="Edit" class="action-btn text-zinc-400 hover:text-yellow-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>' +
-                                        '<button onclick="deleteUser(\\'' + encodeURIComponent(user.username) + '\\')" title="Delete" class="action-btn text-zinc-400 hover:text-red-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>' +
-                                    '</div>' +
-                                '</div>' +
-                            '</td>' +
-                            '<td class="p-2 sm:p-3">' +
-                                '<div class="flex flex-col gap-1 subscription-buttons">' +
-                                    '<div class="flex gap-0.5 sm:gap-1">' +
-                                        '<button onclick="copySubLink(\\'' + encodeURIComponent(user.username) + '\\')" class="flex-1 px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition">📋 Text</button>' +
-                                        '<button onclick="copyJsonSubLink(\\'' + encodeURIComponent(user.username) + '\\')" class="flex-1 px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition">📄 JSON</button>' +
-                                    '</div>' +
-                                    '<button onclick="copyStatusLink(\\'' + encodeURIComponent(user.username) + '\\')" class="px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition">📊 Status</button>' +
-                                '</div>' +
-                            '</td>' +
-                            '<td class="p-2 sm:p-3 text-[10px] sm:text-xs font-mono uppercase text-indigo-400 font-semibold hidden sm:table-cell">VLESS</td>' +
-                            '<td class="p-2 sm:p-3 text-[10px] sm:text-xs hidden md:table-cell">' + 
-                                '<div class="flex flex-wrap gap-0.5 sm:gap-1 max-w-[120px]">' +
-                                    String(user.port || "").split(",").map(function(p) {
-                                        p = p.trim();
-                                        if (!p) return "";
-                                        var isTls = tlsPorts.includes(p);
-                                        return '<span class="badge ' + (isTls ? 'badge-success' : 'badge-warning') + '">' + p + '</span>';
-                                    }).join("") +
-                                '</div>' +
-                            '</td>' +
-                            '<td class="p-2 sm:p-3 hidden lg:table-cell">' + volumeHtml + '</td>' +
-                            '<td class="p-2 sm:p-3 hidden xl:table-cell">' + expiryHtml + '</td>' +
-                            '<td class="p-2 sm:p-3 text-[10px] sm:text-xs text-zinc-400 hidden 2xl:table-cell">' + createdDate + '</td>' +
-                        '</tr>';
+                var container1 = document.getElementById('admins-list');
+                var container2 = document.getElementById('admins-list-2');
+                var html = '';
+                if (data.admins && data.admins.length > 0) {
+                    html = data.admins.map(function(a) {
+                        return '<div class="flex items-center justify-between p-3 glass-light rounded-xl">' +
+                            '<span class="text-white text-sm">' + a.username + '</span>' +
+                            '<div class="flex items-center gap-2">' +
+                                '<span class="text-xs text-zinc-500">' + new Date(a.created_at).toLocaleDateString() + '</span>' +
+                                '<button onclick="deleteAdmin(' + a.id + ')" class="text-red-400 hover:text-red-300 text-xs font-semibold">Remove</button>' +
+                            '</div>' +
+                        '</div>';
                     }).join('');
+                } else {
+                    html = '<p class="text-zinc-400 text-sm">No admins found.</p>';
                 }
+                if (container1) container1.innerHTML = html;
+                if (container2) container2.innerHTML = html;
+            } catch (e) {
+                var errHtml = '<p class="text-red-400 text-sm">Error loading admins</p>';
+                if (document.getElementById('admins-list')) document.getElementById('admins-list').innerHTML = errHtml;
+                if (document.getElementById('admins-list-2')) document.getElementById('admins-list-2').innerHTML = errHtml;
+            }
+        }
+
+        async function addAdmin() {
+            var username = document.getElementById('admin-username').value.trim();
+            var password = document.getElementById('admin-password').value;
+            if (!username || !password || password.length < 4) {
+                alert('❌ Username and password (min 4 chars) required');
+                return;
+            }
+            try {
+                var res = await fetch('/api/admins', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    alert('✅ Admin added successfully!');
+                    document.getElementById('admin-username').value = '';
+                    document.getElementById('admin-password').value = '';
+                    loadAdminsList();
+                } else {
+                    alert('❌ ' + (data.error || 'Failed to add admin'));
+                }
+            } catch (err) {
+                alert('❌ Connection error');
+            }
+        }
+
+        async function addAdmin2() {
+            var username = document.getElementById('admin-username-2').value.trim();
+            var password = document.getElementById('admin-password-2').value;
+            if (!username || !password || password.length < 4) {
+                alert('❌ Username and password (min 4 chars) required');
+                return;
+            }
+            try {
+                var res = await fetch('/api/admins', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    alert('✅ Admin added successfully!');
+                    document.getElementById('admin-username-2').value = '';
+                    document.getElementById('admin-password-2').value = '';
+                    loadAdminsList();
+                } else {
+                    alert('❌ ' + (data.error || 'Failed to add admin'));
+                }
+            } catch (err) {
+                alert('❌ Connection error');
+            }
+        }
+
+        async function deleteAdmin(id) {
+            if (!confirm('Are you sure you want to remove this admin?')) return;
+            try {
+                var res = await fetch('/api/admins', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    alert('✅ Admin removed!');
+                    loadAdminsList();
+                } else {
+                    alert('❌ Failed to remove admin');
+                }
+            } catch (err) {
+                alert('❌ Connection error');
             }
         }
 
         // ============================================
-        // USER ACTION HELPERS
+        // USER FUNCTIONS - FIXED: Process ALL IPs
         // ============================================
         function getVlessLink(username) {
             var user = allUsers.find(function(u) { return u.username === username; });
@@ -4325,13 +3928,6 @@ var HTML_TEMPLATES = {
             }
             var ports = String(user.port || '443').split(',').map(function(p) { return p.trim(); }).filter(function(p) { return p.length > 0; });
             var fp = user.fingerprint || 'chrome';
-            var links = [];
-            var firstIp = ips[0] || host;
-            var firstPort = ports[0] || '443';
-            var isTlsPort = tlsPorts.includes(firstPort);
-            var tlsVal = isTlsPort ? 'tls' : 'none';
-            
-            // Info configs
             var now = new Date();
             var created = new Date(user.created_at);
             var expiryDays = user.expiry_days || 30;
@@ -4339,17 +3935,28 @@ var HTML_TEMPLATES = {
             var daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
             var totalGB = user.limit_gb || 0;
             var usedGB = user.used_gb || 0;
+            var leftGB = Math.max(0, totalGB - usedGB);
             var expiryDateStr = expiryDate.toISOString().split('T')[0].replace(/-/g, '/');
             var usedFormatted = usedGB >= 1 ? usedGB.toFixed(1) + 'GB' : (usedGB * 1024).toFixed(0) + 'MB';
             var totalFormatted = totalGB >= 1 ? totalGB + 'GB' : 'Unlimited';
             var configName = user.config_name || user.username;
+            var links = [];
             
+            // First IP and first port for info configs
+            var firstIp = ips[0] || host;
+            var firstPort = ports[0] || '443';
+            var isTlsPort = tlsPorts.includes(firstPort);
+            var tlsVal = isTlsPort ? 'tls' : 'none';
+            
+            // Config 1: Expiry
             var remark1 = '⏳ ' + user.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
             links.push('vle' + 'ss://' + (user.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark1));
             
+            // Config 2: Usage
             var remark2 = '📊 ' + user.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
             links.push('vle' + 'ss://' + (user.uuid || '') + '@' + firstIp + ':' + firstPort + '?path=%2F&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + '#' + encodeURIComponent(remark2));
             
+            // Configs for all IPs and ports with just username
             ips.forEach(function(ip) {
                 ports.forEach(function(portStr) {
                     var isTlsPortLoop = tlsPorts.includes(portStr);
@@ -4390,10 +3997,129 @@ var HTML_TEMPLATES = {
             var username = decodeURIComponent(encodedUsername);
             var user = allUsers.find(function(u) { return u.username === username; });
             if (!user) return;
-            var link = getVlessLink(username);
-            if (!link) return;
-            // Just copy the VLESS link as JSON array with one item
-            navigator.clipboard.writeText(JSON.stringify([{ config: link }], null, 2)).then(function() { alert('✅ JSON config copied!'); });
+            var host = window.location.hostname;
+            var ips = [host];
+            if (user.ips) {
+                ips = user.ips.split('\\n').map(function(ip) { return ip.trim(); }).filter(function(ip) { return ip.length > 0; });
+                if (ips.length === 0) ips = [host];
+            }
+            var ports = String(user.port || '443').split(',').map(function(p) { return p.trim(); }).filter(function(p) { return p.length > 0; });
+            var fp = user.fingerprint || 'chrome';
+            var configArray = [];
+            
+            // First IP and first port for info configs
+            var firstIp = ips[0] || host;
+            var firstPort = ports[0] || '443';
+            var isTlsPort = tlsPorts.includes(firstPort);
+            var tlsVal = isTlsPort ? 'tls' : 'none';
+            
+            // Config 1: Expiry
+            var remark1 = '⏳ ' + user.username.toUpperCase() + ' | 📅 Exp: ' + expiryDateStr + ' | 🔥 ' + daysLeft + ' Days Left';
+            var jsonConfig1 = buildJsonConfig(user, firstIp, firstPort, tlsVal, host, fp, remark1);
+            configArray.push(jsonConfig1);
+            
+            // Config 2: Usage
+            var remark2 = '📊 ' + user.username.toUpperCase() + ' | 💾 ' + totalFormatted + ' Total | ⚡ ' + usedFormatted + ' Used';
+            var jsonConfig2 = buildJsonConfig(user, firstIp, firstPort, tlsVal, host, fp, remark2);
+            configArray.push(jsonConfig2);
+            
+            // Configs for all IPs and ports with just username
+            ips.forEach(function(ip) {
+                ports.forEach(function(portStr) {
+                    var isTlsPortLoop = tlsPorts.includes(portStr);
+                    var tlsValLoop = isTlsPortLoop ? 'tls' : 'none';
+                    var remark3 = user.config_name || user.username;
+                    var jsonConfig3 = buildJsonConfig(user, ip, portStr, tlsValLoop, host, fp, remark3);
+                    configArray.push(jsonConfig3);
+                });
+            });
+            
+            navigator.clipboard.writeText(JSON.stringify(configArray, null, 2)).then(function() { alert('✅ JSON config copied!'); });
+        }
+
+        function buildJsonConfig(user, ip, portStr, tlsVal, host, fp, remark) {
+            var jsonConfig = {
+                "remarks": remark,
+                "version": { "min": "25.10.15" },
+                "log": { "loglevel": "none" },
+                "dns": {
+                    "servers": [
+                        { "address": "https://8.8.8.8/dns-query", "tag": "remote-dns" },
+                        { "address": "8.8.8.8", "domains": ["full:" + host], "skipFallback": true }
+                    ],
+                    "queryStrategy": "UseIP",
+                    "tag": "dns"
+                },
+                "inbounds": [
+                    {
+                        "listen": "127.0.0.1", "port": 10808, "protocol": "socks",
+                        "settings": { "auth": "noauth", "udp": true },
+                        "sniffing": { "destOverride": ["http", "tls"], "enabled": true, "routeOnly": true },
+                        "tag": "mixed-in"
+                    },
+                    {
+                        "listen": "127.0.0.1", "port": 10853, "protocol": "dokodemo-door",
+                        "settings": { "address": "1.1.1.1", "network": "tcp,udp", "port": 53 },
+                        "tag": "dns-in"
+                    }
+                ],
+                "outbounds": [
+                    {
+                        "protocol": "vle" + "ss",
+                        "settings": {
+                            ["vne" + "xt"]: [
+                                { "address": ip, "port": parseInt(portStr), "users": [{ "id": user.uuid, "encryption": "none" }] }
+                            ]
+                        },
+                        ["stream" + "Settings"]: {
+                            "network": "ws",
+                            ["ws" + "Settings"]: { "host": host, "path": "/" },
+                            "security": tlsVal,
+                            "sockopt": { ["dialer" + "Proxy"]: "fragment" }
+                        },
+                        "tag": "proxy"
+                    },
+                    {
+                        "protocol": "freedom",
+                        "settings": {
+                            "fragment": {
+                                "packets": "tlshello",
+                                "length": window.globalFragLen || "20-30",
+                                "interval": window.globalFragInt || "1-2"
+                            }
+                        },
+                        "streamSettings": {
+                            "sockopt": {
+                                "domainStrategy": "UseIP",
+                                "happyEyeballs": { "tryDelayMs": 250, "prioritizeIPv6": false, "interleave": 2, "maxConcurrentTry": 4 }
+                            }
+                        },
+                        "tag": "fragment"
+                    },
+                    { "protocol": "dns", "settings": { "nonIPQuery": "reject" }, "tag": "dns-out" },
+                    { "protocol": "freedom", "settings": { "domainStrategy": "UseIP" }, "tag": "direct" },
+                    { "protocol": "blackhole", "settings": { "response": { "type": "http" } }, "tag": "block" }
+                ],
+                "routing": {
+                    "domainStrategy": "IPIfNonMatch",
+                    "rules": [
+                        { "inboundTag": ["mixed-in"], "port": 53, "outboundTag": "dns-out", "type": "field" },
+                        { "inboundTag": ["dns-in"], "outboundTag": "dns-out", "type": "field" },
+                        { "inboundTag": ["remote-dns"], "outboundTag": "proxy", "type": "field" },
+                        { "inboundTag": ["dns"], "outboundTag": "direct", "type": "field" },
+                        { "domain": ["geosite:private"], "outboundTag": "direct", "type": "field" },
+                        { "ip": ["geoip:private"], "outboundTag": "direct", "type": "field" },
+                        { "network": "udp", "outboundTag": "block", "type": "field" },
+                        { "network": "tcp", "outboundTag": "proxy", "type": "field" }
+                    ]
+                }
+            };
+            if (tlsVal === 'tls') {
+                jsonConfig.outbounds[0]["stream" + "Settings"]["tls" + "Settings"] = {
+                    "serverName": host, "fingerprint": fp, "alpn": ["http/1.1"], "allowInsecure": false
+                };
+            }
+            return jsonConfig;
         }
 
         function showQR(encodedUsername) {
@@ -4412,25 +4138,15 @@ var HTML_TEMPLATES = {
             }
             isEditMode = true;
             editingUsername = username;
-            var titleEl = document.getElementById('modal-title');
-            var submitBtn = document.getElementById('submit-btn');
-            var nameInput = document.getElementById('input-name');
-            if (titleEl) titleEl.innerText = 'Edit User: ' + username;
-            if (submitBtn) submitBtn.innerText = 'Save';
-            if (nameInput) {
-                nameInput.value = username;
-                nameInput.disabled = true;
-            }
-            var limitInput = document.getElementById('input-limit');
-            var expiryInput = document.getElementById('input-expiry');
-            var ipsInput = document.getElementById('input-ips');
-            var fpSelect = document.getElementById('fingerprint-select');
-            var configNameInput = document.getElementById('config-name-input');
-            if (limitInput) limitInput.value = user.limit_gb || '';
-            if (expiryInput) expiryInput.value = user.expiry_days || '';
-            if (ipsInput) ipsInput.value = user.ips || '';
-            if (fpSelect) fpSelect.value = user.fingerprint || 'chrome';
-            if (configNameInput) configNameInput.value = user.config_name || '';
+            document.getElementById('modal-title').innerText = 'Edit User: ' + username;
+            document.getElementById('submit-btn').innerText = 'Save';
+            document.getElementById('input-name').value = username;
+            document.getElementById('input-name').disabled = true;
+            document.getElementById('input-limit').value = user.limit_gb || '';
+            document.getElementById('input-expiry').value = user.expiry_days || '';
+            document.getElementById('input-ips').value = user.ips || '';
+            document.getElementById('fingerprint-select').value = user.fingerprint || 'chrome';
+            document.getElementById('config-name-input').value = user.config_name || '';
             var userPorts = String(user.port || '').split(',').map(function(p) { return p.trim(); });
             document.querySelectorAll('input[name="ports"]').forEach(function(cb) {
                 cb.checked = userPorts.includes(cb.value);
@@ -4475,69 +4191,12 @@ var HTML_TEMPLATES = {
         }
 
         // ============================================
-        // FORM HANDLER
-        // ============================================
-        async function handleFormSubmit(event) {
-            event.preventDefault();
-            var submitButton = document.getElementById('submit-btn');
-            submitButton.disabled = true;
-            submitButton.innerText = isEditMode ? 'Saving...' : 'Creating...';
-            var username = document.getElementById('input-name').value.trim();
-            var limit = document.getElementById('input-limit').value || null;
-            var expiry = document.getElementById('input-expiry').value || null;
-            var checkedPorts = Array.from(document.querySelectorAll('input[name="ports"]:checked')).map(function(cb) { return cb.value; });
-            if (checkedPorts.length === 0) {
-                alert('❌ Please select at least one port!');
-                submitButton.disabled = false;
-                submitButton.innerText = isEditMode ? 'Save' : 'Create';
-                return;
-            }
-            var port = checkedPorts.join(',');
-            var tls = checkedPorts.some(function(p) { return tlsPorts.includes(p); }) ? 'on' : 'off';
-            var ips = document.getElementById('input-ips').value;
-            var fingerprint = document.getElementById('fingerprint-select').value;
-            var config_name = document.getElementById('config-name-input').value || '';
-            var url = isEditMode ? '/api/users/' + encodeURIComponent(editingUsername) : '/api/users';
-            var method = isEditMode ? 'PUT' : 'POST';
-            try {
-                var response = await fetch(url, {
-                    method: method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: username, limit_gb: limit, expiry_days: expiry, tls: tls, port: port, ips: ips, fingerprint: fingerprint, config_name: config_name })
-                });
-                if (response.ok) {
-                    toggleModal(false);
-                    await loadUsers(true);
-                } else {
-                    var errData = await response.json();
-                    alert('❌ Error: ' + (errData.error || 'Operation failed'));
-                }
-            } catch (err) {
-                alert('❌ Connection error');
-            } finally {
-                submitButton.disabled = false;
-                submitButton.innerText = isEditMode ? 'Save' : 'Create';
-            }
-        }
-
-        // ============================================
-        // LOGOUT
-        // ============================================
-        async function logoutAdmin() {
-            if (!confirm('⚠️ Are you sure you want to sign out?')) return;
-            try {
-                await fetch('/api/logout', { method: 'POST' });
-            } catch (err) {}
-            window.location.reload();
-        }
-
-        // ============================================
         // LOCATIONS
         // ============================================
         function getFlagEmoji(countryCode) {
             if (!countryCode) return '🌐';
+            var codePoints = countryCode.toUpperCase().split('').map(function(char) { return 127397 + char.charCodeAt(0); });
             try {
-                var codePoints = countryCode.toUpperCase().split('').map(function(char) { return 127397 + char.charCodeAt(0); });
                 return String.fromCodePoint.apply(String, codePoints);
             } catch (e) {
                 return '🌐';
@@ -4546,7 +4205,6 @@ var HTML_TEMPLATES = {
 
         function renderLocationsUI(locations, activeIata) {
             var select = document.getElementById('location-select');
-            if (!select) return;
             locations.sort(function(a, b) { return (a.cca2 || '').localeCompare(b.cca2 || ''); });
             var html = '<option value="">🌐 Default Location</option>';
             locations.forEach(function(loc) {
@@ -4561,7 +4219,6 @@ var HTML_TEMPLATES = {
 
         async function loadLocations() {
             var select = document.getElementById('location-select');
-            if (!select) return;
             var cachedLocations = localStorage.getItem('cached_locations_list');
             var cachedActiveIata = localStorage.getItem('cached_active_iata') || '';
             var hasCachedLocs = false;
@@ -4581,27 +4238,13 @@ var HTML_TEMPLATES = {
                     var statusData = await statusRes.json();
                     activeIata = statusData.iata || '';
                     localStorage.setItem('cached_active_iata', activeIata);
-                    if (statusData.frag_len) {
+                    if(statusData.frag_len) {
                         window.globalFragLen = statusData.frag_len;
-                        var fragLenInput = document.getElementById('frag-length');
-                        if (fragLenInput) fragLenInput.value = statusData.frag_len;
+                        document.getElementById('frag-length').value = statusData.frag_len;
                     }
-                    if (statusData.frag_int) {
+                    if(statusData.frag_int) {
                         window.globalFragInt = statusData.frag_int;
-                        var fragIntInput = document.getElementById('frag-interval');
-                        if (fragIntInput) fragIntInput.value = statusData.frag_int;
-                    }
-                    if (statusData.panel_domain) {
-                        var domainInput = document.getElementById('panel-domain-input');
-                        if (domainInput) domainInput.value = statusData.panel_domain;
-                    }
-                    if (statusData.path_prefix) {
-                        var prefixInput = document.getElementById('path-prefix-input');
-                        if (prefixInput) prefixInput.value = statusData.path_prefix;
-                    }
-                    if (statusData.auto_reset !== undefined) {
-                        var resetCheckbox = document.getElementById('auto-reset-checkbox');
-                        if (resetCheckbox) resetCheckbox.checked = statusData.auto_reset;
+                        document.getElementById('frag-interval').value = statusData.frag_int;
                     }
                 }
                 var res = await fetch('/locations');
@@ -4623,10 +4266,7 @@ var HTML_TEMPLATES = {
             var select = document.getElementById('location-select');
             var fragLen = document.getElementById('frag-length').value || "20-30";
             var fragInt = document.getElementById('frag-interval').value || "1-2";
-            var iata = select ? select.value : '';
-            var panelDomain = document.getElementById('panel-domain-input').value || '';
-            var pathPrefix = document.getElementById('path-prefix-input').value || '@VoidLatency';
-            var autoReset = document.getElementById('auto-reset-checkbox').checked;
+            var iata = select.value;
             var btn = document.getElementById('save-settings-btn');
             btn.disabled = true;
             btn.innerText = 'Saving...';
@@ -4651,15 +4291,7 @@ var HTML_TEMPLATES = {
                 var response = await fetch('/api/proxy-ip', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        proxy_ip: resolvedIp, 
-                        iata: iata ? iata.toUpperCase() : '', 
-                        frag_len: fragLen, 
-                        frag_int: fragInt,
-                        panel_domain: panelDomain,
-                        path_prefix: pathPrefix,
-                        auto_reset: autoReset
-                    })
+                    body: JSON.stringify({ proxy_ip: resolvedIp, iata: iata ? iata.toUpperCase() : '', frag_len: fragLen, frag_int: fragInt })
                 });
                 if (response.ok) {
                     window.globalFragLen = fragLen;
@@ -4713,44 +4345,297 @@ var HTML_TEMPLATES = {
         }
 
         // ============================================
-        // API DOCS
+        // LOGOUT
         // ============================================
-        async function loadApiDocs() {
-            var container = document.getElementById('api-docs-container');
-            if (!container) return;
+        async function logoutAdmin() {
+            if (!confirm('⚠️ Are you sure you want to sign out?')) return;
             try {
-                var res = await fetch('/api/docs');
+                await fetch('/api/logout', { method: 'POST' });
+            } catch (err) {}
+            window.location.reload();
+        }
+
+        // ============================================
+        // USER LOADING & RENDERING
+        // ============================================
+        async function loadUsers(silent) {
+            var loadingState = document.getElementById('loading-state');
+            var tableContainer = document.getElementById('users-table-container');
+            var emptyState = document.getElementById('empty-state');
+            if (!silent) {
+                loadingState.classList.remove('hidden');
+                tableContainer.classList.add('hidden');
+                emptyState.classList.add('hidden');
+            }
+            try {
+                var res = await fetch('/api/users?t=' + Date.now());
+                if (!res.ok) throw new Error();
                 var data = await res.json();
-                var html = '';
-                for (var category in data.endpoints) {
-                    html += '<div class="mb-6">';
-                    html += '<h3 class="text-sm font-bold text-white uppercase tracking-wider mb-3">' + category.toUpperCase() + '</h3>';
-                    data.endpoints[category].forEach(function(ep) {
-                        html += '<div class="glass-light rounded-xl p-3 mb-2">';
-                        html += '<div class="flex flex-wrap items-center gap-2 mb-1">';
-                        html += '<span class="badge ' + (ep.method === 'GET' ? 'badge-success' : ep.method === 'POST' ? 'badge-purple' : ep.method === 'PUT' ? 'badge-info' : 'badge-danger') + '">' + ep.method + '</span>';
-                        html += '<code class="text-xs text-zinc-300 font-mono">' + ep.path + '</code>';
-                        html += '</div>';
-                        html += '<p class="text-xs text-zinc-400">' + (ep.description || '') + '</p>';
-                        if (ep.body) {
-                            html += '<details class="mt-1">';
-                            html += '<summary class="text-xs text-zinc-500 cursor-pointer hover:text-zinc-300">📝 Request Body</summary>';
-                            html += '<pre class="text-xs text-zinc-400 font-mono mt-1 p-2 bg-zinc-900/50 rounded">' + JSON.stringify(ep.body, null, 2) + '</pre>';
-                            html += '</details>';
-                        }
-                        if (ep.response) {
-                            html += '<details class="mt-1">';
-                            html += '<summary class="text-xs text-zinc-500 cursor-pointer hover:text-zinc-300">📤 Response</summary>';
-                            html += '<pre class="text-xs text-zinc-400 font-mono mt-1 p-2 bg-zinc-900/50 rounded">' + JSON.stringify(ep.response, null, 2) + '</pre>';
-                            html += '</details>';
-                        }
-                        html += '</div>';
-                    });
-                    html += '</div>';
+                renderUsersUI(data);
+            } catch (err) {
+                if (!silent) {
+                    loadingState.innerHTML = '<span class="text-red-400">❌ Error loading users</span>';
                 }
-                container.innerHTML = html;
-            } catch (e) {
-                container.innerHTML = '<p class="text-red-400 text-sm">❌ Error loading API documentation</p>';
+            }
+        }
+
+        function renderUsersUI(data) {
+            try {
+                var users = data.users || [];
+                allUsers = users;
+                var serverTime = data.serverTime || Date.now();
+                lastServerTime = serverTime;
+                var totalUsersCount = users.length;
+                var activeUsersCount = users.filter(function(u) { return u.is_online === 1; }).length;
+                var totalGbUsage = users.reduce(function(sum, u) { return sum + (u.used_gb || 0); }, 0);
+                document.getElementById('stat-total-users').innerText = totalUsersCount;
+                document.getElementById('stat-active-users').innerText = activeUsersCount;
+                document.getElementById('stat-total-usage').innerText = totalGbUsage < 1 ? (totalGbUsage * 1024).toFixed(0) + ' MB' : totalGbUsage.toFixed(2) + ' GB';
+                var topUser = users.reduce(function(max, u) { return (u.used_gb || 0) > (max.used_gb || 0) ? u : max; }, { username: 'None', used_gb: 0 });
+                document.getElementById('stat-top-user').innerText = topUser.username;
+                var topUsage = topUser.used_gb || 0;
+                document.getElementById('stat-top-user-usage').innerText = topUsage < 1 ? (topUsage * 1024).toFixed(0) + ' MB used' : topUsage.toFixed(2) + ' GB used';
+                filterAndRenderUsers();
+                updateXrayStatus();
+            } catch (err) {
+                document.getElementById('loading-state').innerHTML = '<span class="text-red-400">❌ Error processing user data</span>';
+            }
+        }
+
+        function filterAndRenderUsers() {
+            if (!allUsers) return;
+            var searchQuery = (document.getElementById('search-input').value || '').toLowerCase().trim();
+            var filterStatus = document.getElementById('filter-status').value;
+            var sortVal = document.getElementById('sort-users').value;
+            var serverTime = lastServerTime || Date.now();
+            var filtered = allUsers.slice();
+            if (searchQuery) {
+                filtered = filtered.filter(function(u) {
+                    return (u.username || '').toLowerCase().includes(searchQuery) || 
+                           (u.uuid || '').toLowerCase().includes(searchQuery);
+                });
+            }
+            if (filterStatus !== 'all') {
+                filtered = filtered.filter(function(u) {
+                    var isOnline = u.is_online === 1;
+                    var isActive = u.is_active === 1;
+                    var isExpired = false;
+                    if (u.limit_gb && u.used_gb >= u.limit_gb) isExpired = true;
+                    if (u.expiry_days && u.created_at) {
+                        var created = new Date(u.created_at);
+                        var expiryDate = new Date(created.getTime() + (u.expiry_days * 24 * 60 * 60 * 1000));
+                        if (new Date(serverTime) > expiryDate) isExpired = true;
+                    }
+                    if (filterStatus === 'active') return isActive && !isExpired;
+                    if (filterStatus === 'inactive') return !isActive;
+                    if (filterStatus === 'online') return isOnline;
+                    if (filterStatus === 'offline') return !isOnline;
+                    if (filterStatus === 'expired') return isExpired || !isActive;
+                    return true;
+                });
+            }
+            filtered.sort(function(a, b) {
+                if (sortVal === 'newest') return b.id - a.id;
+                if (sortVal === 'name') return (a.username || '').localeCompare(b.username || '');
+                if (sortVal === 'usage-desc') return (b.used_gb || 0) - (a.used_gb || 0);
+                if (sortVal === 'usage-asc') return (a.used_gb || 0) - (b.used_gb || 0);
+                if (sortVal === 'expiry-asc') {
+                    var getRemaining = function(u) {
+                        if (!u.expiry_days) return Infinity;
+                        if (!u.created_at) return Infinity;
+                        var created = new Date(u.created_at);
+                        var expiryDate = new Date(created.getTime() + (u.expiry_days * 24 * 60 * 60 * 1000));
+                        return expiryDate - new Date(serverTime);
+                    };
+                    return getRemaining(a) - getRemaining(b);
+                }
+                return 0;
+            });
+            renderFilteredUsers(filtered, serverTime);
+        }
+
+        function renderFilteredUsers(users, serverTime) {
+            var loadingState = document.getElementById('loading-state');
+            var tableContainer = document.getElementById('users-table-container');
+            var emptyState = document.getElementById('empty-state');
+            var tbody = document.getElementById('users-tbody');
+            if (users.length === 0) {
+                loadingState.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                tableContainer.classList.add('hidden');
+                if (allUsers && allUsers.length > 0) {
+                    emptyState.querySelector('p').innerText = 'No users match your search criteria.';
+                } else {
+                    emptyState.querySelector('p').innerText = 'No users found. Click "Add User" to get started.';
+                }
+            } else {
+                loadingState.classList.add('hidden');
+                emptyState.classList.add('hidden');
+                tableContainer.classList.remove('hidden');
+                tbody.innerHTML = users.map(function(user) {
+                    var createdDate = user.created_at ? new Date(user.created_at).toLocaleDateString() : '-';
+                    var daysRemaining = 'Unlimited';
+                    var daysPercent = 100;
+                    if (user.expiry_days) {
+                        if (user.created_at) {
+                            var created = new Date(user.created_at);
+                            var expiryDate = new Date(created.getTime() + (user.expiry_days * 24 * 60 * 60 * 1000));
+                            var diffDays = Math.ceil((expiryDate - new Date(serverTime)) / (1000 * 60 * 60 * 24));
+                            daysRemaining = diffDays > 0 ? diffDays : 0;
+                            daysPercent = Math.max(0, Math.min(100, (daysRemaining / user.expiry_days) * 100));
+                        } else {
+                            daysRemaining = user.expiry_days;
+                        }
+                    }
+                    var usedGb = user.used_gb || 0;
+                    var formattedUsed = usedGb < 1 ? (usedGb * 1024).toFixed(0) + ' MB' : usedGb.toFixed(2) + ' GB';
+                    var volumeHtml = '';
+                    if (user.limit_gb) {
+                        var limitPercent = Math.min((usedGb / user.limit_gb) * 100, 100);
+                        var limitHue = 120 - (limitPercent * 1.2);
+                        var formattedLimit = user.limit_gb < 1 ? (user.limit_gb * 1024).toFixed(0) + ' MB' : user.limit_gb + ' GB';
+                        volumeHtml = '<div class="flex flex-col gap-1 w-full min-w-[100px]">' +
+                            '<div class="flex justify-between text-[10px] sm:text-[11px] text-zinc-400 font-medium">' +
+                                '<span>Used: ' + formattedUsed + '</span>' +
+                                '<span>Total: ' + formattedLimit + '</span>' +
+                            '</div>' +
+                            '<div class="w-full bg-zinc-800 rounded-full h-1 overflow-hidden">' +
+                                '<div class="h-1 rounded-full transition-all duration-500" style="width: ' + limitPercent + '%; background-color: hsl(' + limitHue + ', 80%, 45%)"></div>' +
+                            '</div>' +
+                        '</div>';
+                    } else {
+                        volumeHtml = '<div class="flex flex-col gap-1 w-full min-w-[100px]">' +
+                            '<div class="flex justify-between text-[10px] sm:text-[11px] text-zinc-400 font-medium">' +
+                                '<span>Used: ' + formattedUsed + '</span>' +
+                                '<span>Total: Unlimited</span>' +
+                            '</div>' +
+                            '<div class="w-full bg-zinc-800 rounded-full h-1 overflow-hidden">' +
+                                '<div class="bg-blue-500 h-1 rounded-full transition-all duration-500" style="width: 100%"></div>' +
+                            '</div>' +
+                        '</div>';
+                    }
+                    var expiryHtml = '';
+                    if (user.expiry_days) {
+                        var expiryHue = daysPercent * 1.2;
+                        expiryHtml = '<div class="flex flex-col gap-1 w-full min-w-[100px]">' +
+                            '<div class="flex justify-between text-[10px] sm:text-[11px] text-zinc-400 font-medium">' +
+                                '<span>Remaining: ' + daysRemaining + ' days</span>' +
+                                '<span>Total: ' + user.expiry_days + ' days</span>' +
+                            '</div>' +
+                            '<div class="w-full bg-zinc-800 rounded-full h-1 overflow-hidden flex justify-end">' +
+                                '<div class="h-1 rounded-full transition-all duration-500" style="width: ' + daysPercent + '%; background-color: hsl(' + expiryHue + ', 80%, 45%)"></div>' +
+                            '</div>' +
+                        '</div>';
+                    } else {
+                        expiryHtml = '<div class="flex flex-col gap-1 w-full min-w-[100px]">' +
+                            '<div class="flex justify-between text-[10px] sm:text-[11px] text-zinc-400 font-medium">' +
+                                '<span>Remaining: Unlimited</span>' +
+                                '<span>Total: Unlimited</span>' +
+                            '</div>' +
+                            '<div class="w-full bg-zinc-800 rounded-full h-1 overflow-hidden flex justify-end">' +
+                                '<div class="bg-blue-500 h-1 rounded-full transition-all duration-500" style="width: 100%"></div>' +
+                            '</div>' +
+                        '</div>';
+                    }
+                    var statusBtnColor = user.is_active === 0 ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-amber-400 hover:bg-amber-500/10';
+                    var statusBtnTitle = user.is_active === 0 ? 'Activate' : 'Deactivate';
+                    var statusBtnIcon = user.is_active === 0 
+                        ? '<svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
+                        : '<svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+                    var statusClass = user.is_active === 0 ? 'badge-danger' : 'badge-success';
+                    var statusText = user.is_active === 0 ? 'Inactive' : 'Active';
+                    var onlineClass = user.is_online === 1 ? 'badge-success' : 'badge';
+                    var onlineText = user.is_online === 1 ? '● Online' : 'Offline';
+                    var configName = user.config_name || user.username;
+                    return '<tr class="hover:bg-white/5 border-b border-zinc-800/30">' +
+                        '<td class="p-2 sm:p-3">' +
+                            '<div class="flex flex-col gap-1">' +
+                                '<span class="font-bold text-white text-xs sm:text-sm truncate max-w-[120px] sm:max-w-[200px]">' + configName + '</span>' +
+                                '<div class="flex items-center gap-1 flex-wrap">' +
+                                    '<span class="badge ' + statusClass + '">' + statusText + '</span>' +
+                                    '<span class="badge ' + onlineClass + '">' + onlineText + '</span>' +
+                                '</div>' +
+                                '<div class="flex gap-0.5 sm:gap-1 flex-wrap user-actions-wrap">' +
+                                    '<button onclick="copyConfig(\\'' + encodeURIComponent(user.username) + '\\')" title="Copy VLESS" class="action-btn text-zinc-400 hover:text-indigo-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>' +
+                                    '<button onclick="copyJsonConfig(\\'' + encodeURIComponent(user.username) + '\\')" title="Copy JSON" class="action-btn text-zinc-400 hover:text-purple-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg></button>' +
+                                    '<button onclick="showQR(\\'' + encodeURIComponent(user.username) + '\\')" title="QR" class="action-btn text-zinc-400 hover:text-emerald-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg></button>' +
+                                    '<button onclick="toggleUserStatus(\\'' + encodeURIComponent(user.username) + '\\')" title="' + statusBtnTitle + '" class="action-btn ' + statusBtnColor + ' transition">' + statusBtnIcon + '</button>' +
+                                    '<button onclick="editUser(\\'' + encodeURIComponent(user.username) + '\\')" title="Edit" class="action-btn text-zinc-400 hover:text-yellow-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>' +
+                                    '<button onclick="deleteUser(\\'' + encodeURIComponent(user.username) + '\\')" title="Delete" class="action-btn text-zinc-400 hover:text-red-400 transition"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>' +
+                                '</div>' +
+                            '</div>' +
+                        '</td>' +
+                        '<td class="p-2 sm:p-3">' +
+                            '<div class="flex flex-col gap-1 subscription-buttons">' +
+                                '<div class="flex gap-0.5 sm:gap-1">' +
+                                    '<button onclick="copySubLink(\\'' + encodeURIComponent(user.username) + '\\')" class="flex-1 px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition">📋 Text</button>' +
+                                    '<button onclick="copyJsonSubLink(\\'' + encodeURIComponent(user.username) + '\\')" class="flex-1 px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition">📄 JSON</button>' +
+                                '</div>' +
+                                '<button onclick="copyStatusLink(\\'' + encodeURIComponent(user.username) + '\\')" class="px-1 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition">📊 Status</button>' +
+                            '</div>' +
+                        '</td>' +
+                        '<td class="p-2 sm:p-3 text-[10px] sm:text-xs font-mono uppercase text-indigo-400 font-semibold hidden sm:table-cell">VLESS</td>' +
+                        '<td class="p-2 sm:p-3 text-[10px] sm:text-xs hidden md:table-cell">' + 
+                            '<div class="flex flex-wrap gap-0.5 sm:gap-1 max-w-[120px]">' +
+                                String(user.port || "").split(",").map(function(p) {
+                                    p = p.trim();
+                                    if (!p) return "";
+                                    var isTls = tlsPorts.includes(p);
+                                    return '<span class="badge ' + (isTls ? 'badge-success' : 'badge-warning') + '">' + p + '</span>';
+                                }).join("") +
+                            '</div>' +
+                        '</td>' +
+                        '<td class="p-2 sm:p-3 hidden lg:table-cell">' + volumeHtml + '</td>' +
+                        '<td class="p-2 sm:p-3 hidden xl:table-cell">' + expiryHtml + '</td>' +
+                        '<td class="p-2 sm:p-3 text-[10px] sm:text-xs text-zinc-400 hidden 2xl:table-cell">' + createdDate + '</td>' +
+                    '</tr>';
+                }).join('');
+            }
+        }
+
+        // ============================================
+        // FORM HANDLER
+        // ============================================
+        async function handleFormSubmit(event) {
+            event.preventDefault();
+            var submitButton = document.getElementById('submit-btn');
+            submitButton.disabled = true;
+            submitButton.innerText = isEditMode ? 'Saving...' : 'Creating...';
+            var username = document.getElementById('input-name').value.trim();
+            var limit = document.getElementById('input-limit').value || null;
+            var expiry = document.getElementById('input-expiry').value || null;
+            var checkedPorts = Array.from(document.querySelectorAll('input[name="ports"]:checked')).map(function(cb) { return cb.value; });
+            if (checkedPorts.length === 0) {
+                alert('❌ Please select at least one port!');
+                submitButton.disabled = false;
+                submitButton.innerText = isEditMode ? 'Save' : 'Create';
+                return;
+            }
+            var port = checkedPorts.join(',');
+            var tls = checkedPorts.some(function(p) { return tlsPorts.includes(p); }) ? 'on' : 'off';
+            var ips = document.getElementById('input-ips').value;
+            var fingerprint = document.getElementById('fingerprint-select').value;
+            var config_name = document.getElementById('config-name-input').value || '';
+            var url = isEditMode ? '/api/users/' + encodeURIComponent(editingUsername) : '/api/users';
+            var method = isEditMode ? 'PUT' : 'POST';
+            try {
+                var response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, limit_gb: limit, expiry_days: expiry, tls, port, ips, fingerprint, config_name })
+                });
+                if (response.ok) {
+                    toggleModal(false);
+                    await loadUsers(true);
+                } else {
+                    var errData = await response.json();
+                    alert('❌ Error: ' + (errData.error || 'Operation failed'));
+                }
+            } catch (err) {
+                alert('❌ Connection error');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerText = isEditMode ? 'Save' : 'Create';
             }
         }
 
@@ -4761,33 +4646,26 @@ var HTML_TEMPLATES = {
             renderPortCheckboxes();
             loadUsers();
             loadLocations();
+            loadAdminsList();
             loadTheme();
-            updateSystemStats();
-            
-            // Start stats interval (every 2 seconds for smooth animation)
-            statsInterval = setInterval(updateSystemStats, 2000);
-            
-            // Refresh users every 30 seconds
+            checkUpdate();
             setInterval(function() { loadUsers(true); }, 30000);
-            
-            // Show dashboard by default
+            setInterval(updateXrayStatus, 10000);
             showPage('dashboard');
-            
             document.getElementById('log-start-time').innerText = new Date().toLocaleString();
-            
-            // Ensure port 443 is checked by default
             setTimeout(function() {
                 var cb443 = document.querySelector('input[name="ports"][value="443"]');
                 if (cb443) cb443.checked = true;
             }, 200);
             
-            // Close sidebar on resize
+            // بستن منو با تغییر اندازه صفحه
             window.addEventListener('resize', function() {
                 if (window.innerWidth >= 1024) {
                     var sidebar = document.querySelector('.sidebar');
                     var overlay = document.getElementById('sidebar-overlay');
                     if (sidebar) sidebar.classList.remove('active');
                     if (overlay) overlay.classList.remove('active');
+                    
                     var menuIcon = document.querySelector('#menu-icon');
                     if (menuIcon) {
                         menuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>';
