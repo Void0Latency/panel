@@ -10,8 +10,6 @@ CREATE TABLE IF NOT EXISTS users (
   tls TEXT,
   port INTEGER,
   used_gb REAL DEFAULT 0,
-  used_up_gb REAL DEFAULT 0,
-  used_down_gb REAL DEFAULT 0,
   is_active INTEGER DEFAULT 1,
   last_active INTEGER,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -40,13 +38,8 @@ CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active);
 CREATE INDEX IF NOT EXISTS idx_users_online ON users(last_active);
 
 -- Default settings
-INSERT OR IGNORE INTO settings (key, value) VALUES
+INSERT OR IGNORE INTO settings (key, value) VALUES 
   ('proxy_ip', 'proxyip.cmliussss.net'),
   ('frag_len', '20-30'),
   ('frag_int', '1-2'),
-  ('theme', 'dark'),
-  ('vless_path', '@VoidLatency'),
-  ('xray_running', '1'),
-  ('reset_scheduler', '0');
--- deploy_time is seeded at first boot by the Worker (ensureSchema) so that
--- uptime climbs continuously from the actual deploy moment.
+  ('theme', 'dark');
